@@ -1,0 +1,70 @@
+# ============================================================
+# Self-Forging AI Agent - .gitignore
+# ============================================================
+
+# Environment & Secrets
+.env
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+.venv/
+venv/
+env/
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Node / Frontend
+node_modules/
+.next/
+.nuxt/
+dist/
+*.local
+
+# Docker
+docker-compose.override.yml
+
+# Database
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Logs
+logs/
+*.log
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Sandbox artifacts (generated tools before verification)
+sandbox/temp/
+sandbox/artifacts/
+
+# Generated tools cache
+.tool_cache/
+tests/

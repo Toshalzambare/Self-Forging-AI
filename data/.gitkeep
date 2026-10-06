@@ -1,0 +1,2 @@
+# This directory stores the SQLite database (gitignored)
+# The registry.db file will be auto-created on first run.

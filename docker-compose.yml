@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # ============================================================
+  # OmniRoute - LLM Gateway (Free Multi-Model Router)
+  # NOTE: OmniRoute is already running on the other laptop
+  #       at 192.168.1.3:20128. This service is here as a
+  #       reference in case you want to run it locally instead.
+  # ============================================================
+  # omniroute:
+  #   image: diegosouzapw/omniroute:latest
+  #   container_name: omniroute
+  #   restart: unless-stopped
+  #   ports:
+  #     - "20128:20128"
+  #   volumes:
+  #     - omniroute_data:/app/data
+  #   environment:
+  #     - PORT=20128
+  #     - NODE_ENV=production
+  #   stop_grace_period: 40s
+
+  # ============================================================
+  # Python Sandbox - Isolated environment for testing forged tools
+  # ============================================================
+  sandbox:
+    image: python:3.11-slim
+    container_name: self-forge-sandbox
+    command: ["tail", "-f", "/dev/null"]  # Keep alive for on-demand execution
+    restart: unless-stopped
+    volumes:
+      - sandbox_workspace:/workspace
+    working_dir: /workspace
+    mem_limit: 512m
+    cpus: 1.0
+    # Network enabled so tools can install pip packages and access APIs
+    networks:
+      - sandbox_net
+
+networks:
+  sandbox_net:
+    driver: bridge
+
+volumes:
+  # omniroute_data:
+  sandbox_workspace:

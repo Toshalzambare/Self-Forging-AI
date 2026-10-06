@@ -1,0 +1,33 @@
+# Self-Forging AI Agent - Backend Dependencies
+
+# Core Framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+python-dotenv==1.0.1
+websockets==13.0
+
+# AI / LLM
+openai==1.109.1
+langgraph==0.4.1
+langchain-core==0.3.0
+langchain-openai==0.3.0
+
+# Docker Sandbox
+docker==7.1.0
+
+# Tool Registry
+sqlalchemy==2.0.35
+aiosqlite==0.20.0
+
+# MCP Server
+mcp==1.9.0
+
+# Bootstrap Tools
+duckduckgo-search==7.5.0
+requests==2.32.3
+beautifulsoup4==4.12.3
+markdownify==0.14.1
+
+# Testing
+pytest==8.3.3
+pytest-asyncio==0.24.0
