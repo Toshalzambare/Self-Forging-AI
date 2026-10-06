@@ -1,0 +1,115 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, Link } from 'react-router-dom';
+
+const Header = ({ onOpenModelModal, onOpenSettingsModal, onToggleLogsDrawer, selectedModel }) => {
+      const location = useLocation();
+      const currentPath = location.pathname;
+
+      const navLinks = [
+        { path: '/', label: 'Conversation', icon: 'forum' },
+        { path: '/ecosystem-tools', label: 'Ecosystem & Tools', count: '24', icon: 'extension' },
+        { path: '/activity-logs', label: 'Activity & Logs', icon: 'browse_activity' },
+        { path: '/api-settings', label: 'API & Settings', icon: 'tune' }
+      ];
+
+      return (
+        <header className="fixed top-0 left-0 right-0 z-40 bg-surface-container-lowest/90 border-b border-outline-variant/30 backdrop-blur-md h-16">
+          <div className="flex items-center justify-between px-6 h-full max-w-7xl mx-auto w-full">
+            {/* Companion Identity */}
+            <div className="flex items-center space-x-5">
+              <Link to="/" className="flex items-center space-x-3 cursor-pointer group no-underline text-inherit">
+                <div className="w-9 h-9 rounded-xl bg-primary-container/20 border border-primary/30 flex items-center justify-center text-primary group-hover:bg-primary-container/30 transition-all shadow-sm">
+                  <span className="material-symbols-outlined text-[20px] text-primary material-symbols-fill">auto_awesome</span>
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-headline-sm text-headline-sm font-semibold tracking-tight text-on-surface">Twinkle</span>
+                    <span className="px-2 py-0.5 rounded-full bg-primary-container/15 text-primary font-label-sm text-label-sm border border-primary/20">Task Partner</span>
+                  </div>
+                  <p className="font-label-sm text-[11px] text-on-surface-variant font-normal leading-tight">Your personal autonomous companion</p>
+                </div>
+              </Link>
+
+              {/* Navigation Tabs */}
+              <nav className="hidden md:flex items-center pl-5 border-l border-outline-variant/30 space-x-1.5">
+                {navLinks.map(link => {
+                  const isActive = (currentPath === link.path) || (link.path === '/' && currentPath === '');
+                  return (
+                    <Link
+                      key={link.path}
+                      to={link.path}
+                      className={`px-3.5 py-1.5 rounded-xl font-body-md text-body-md font-medium transition-all duration-150 flex items-center space-x-2 no-underline ${
+                        isActive
+                          ? 'bg-surface-container-high text-primary border border-outline-variant/40 shadow-sm'
+                          : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[17px]">{link.icon}</span>
+                      <span>{link.label}</span>
+                      {link.count && (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-surface-container-highest text-secondary">
+                          {link.count}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+
+            {/* Right Header Indicators & Actions */}
+            <div className="flex items-center space-x-3">
+              {/* Quick Model Switcher Trigger */}
+              <button
+                onClick={onOpenModelModal}
+                className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface font-body-sm text-body-sm transition-colors shadow-sm"
+                title="Switch active intelligence model"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span className="font-medium text-xs sm:text-sm">{selectedModel}</span>
+                <span className="font-label-sm text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20 hidden sm:inline">Auto</span>
+                <span className="material-symbols-outlined text-[16px] text-outline">unfold_more</span>
+              </button>
+
+              {/* Ecosystem Tools Link */}
+              <Link
+                to="/ecosystem-tools"
+                className="hidden xl:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 text-on-surface-variant font-body-sm text-body-sm transition-colors no-underline"
+              >
+                <span className="material-symbols-outlined text-[16px] text-primary">hub</span>
+                <span className="text-on-surface font-medium">24 Tools Ready</span>
+              </Link>
+
+              {/* Activity Feed Quick Toggle */}
+              <button
+                onClick={onToggleLogsDrawer}
+                className="hidden lg:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-on-surface text-body-sm transition-colors shadow-sm"
+                title="Open live activity side panel"
+              >
+                <span className="material-symbols-outlined text-[17px] text-secondary">sync_alt</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+              </button>
+
+              {/* User Profile */}
+              <Link
+                to="/api-settings"
+                className="flex items-center space-x-2.5 pl-2 border-l border-outline-variant/30 no-underline"
+                title="Elena Vance Profile & Settings"
+              >
+                <div className="flex items-center space-x-2 py-1 px-2.5 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/25 transition-colors">
+                  <div className="w-6 h-6 rounded-full bg-primary-container/30 border border-primary/40 flex items-center justify-center text-primary text-xs font-semibold">
+                    EA
+                  </div>
+                  <div className="hidden lg:flex flex-col text-left">
+                    <span className="text-xs font-medium text-on-surface leading-tight">Elena Vance</span>
+                    <span className="text-[10px] text-emerald-400 leading-tight font-medium">Connected &amp; Ready</span>
+                  </div>
+                </div>
+              </Link>
+            </div>
+          </div>
+        </header>
+      );
+    };
+
+export default Header;

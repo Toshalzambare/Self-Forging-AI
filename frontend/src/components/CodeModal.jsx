@@ -1,0 +1,110 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+const CodeModal = ({ isOpen, onClose, toolName, showToast }) => {
+      if (!isOpen) return null;
+
+      const codeContent = toolName === 'SQLSynthesizer'
+        ? `@register_tool(
+    name="sql_query_synthesizer",
+    description="Executes introspected read-only SQL queries",
+    read_only=True
+)
+def run_analytical_query(ctx: Context, query_pattern: str):
+    # Enforces read-only AST parse
+    disallowed = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER"]
+    if any(keyword in query_pattern.upper() for keyword in disallowed):
+        raise SecurityException("Unpermitted mutation keyword.")
+    
+    db_conn = ctx.get_connection("postgres_replica")
+    with db_conn.cursor() as cur:
+        cur.execute(query_pattern)
+        return {"rows": cur.fetchall(), "count": cur.rowcount}`
+        : `import os
+import requests
+from twinkle.mcp import register_tool, Context
+
+@register_tool(
+    name="notion_digest_sync",
+    description="Syncs structured financial market briefs directly to database",
+    read_only=False
+)
+def sync_financial_cards(ctx: Context, payload: list[dict]):
+    notion_token = ctx.secrets.get("NOTION_API_KEY")
+    db_id = ctx.config.get("DATABASE_ID")
+    
+    headers = {
+        "Authorization": f"Bearer {notion_token}",
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json"
+    }
+    
+    results = []
+    for item in payload:
+        card = {
+            "parent": {"database_id": db_id},
+            "properties": {
+                "Ticker": {"title": [{"text": {"content": item['ticker']}}]},
+                "Sentiment": {"select": {"name": item['sentiment']}},
+                "Summary": {"rich_text": [{"text": {"content": item['summary']}}]}
+            }
+        }
+        res = requests.post("https://api.notion.com/v1/pages", headers=headers, json=card)
+        results.append(res.status_code)
+    
+    return {"status": "success", "synced_records": len(results)}`;
+
+      const title = toolName === 'SQLSynthesizer' ? 'SQLQuerySynthesizer.py' : 'NotionDigestSync.py';
+
+      return (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-surface-container-low rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[870px]">
+            <div className="p-5 bg-surface-container flex items-center justify-between border-b border-outline-variant/20">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-lg bg-primary-container/20 text-primary flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px] material-symbols-fill">terminal</span>
+                </div>
+                <div>
+                  <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface">{title}</h3>
+                  <p className="font-label-sm text-label-sm text-primary">Dynamically compiled sandbox execution script</p>
+                </div>
+              </div>
+              <button className="p-1 rounded-lg text-on-surface-variant hover:text-on-surface" onClick={onClose}>
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto font-mono text-body-sm text-on-surface bg-surface-container-lowest/80 space-y-2">
+              <div className="text-tertiary"># Generated autonomously by Twinkle Agent [Model: Claude 3.7 Sonnet]</div>
+              <div className="text-tertiary"># Verification: AST static analysis passed | Output schema locked</div>
+              <pre className="text-primary-fixed-dim whitespace-pre-wrap leading-relaxed mt-2 text-xs sm:text-sm">
+                {codeContent}
+              </pre>
+            </div>
+            <div className="p-4 bg-surface-container flex items-center justify-between border-t border-outline-variant/20">
+              <div className="flex items-center space-x-2 text-on-surface-variant font-label-sm text-label-sm">
+                <span className="material-symbols-outlined text-primary text-[16px]">lock</span>
+                <span>Sandboxed under gVisor Isolation Protocol</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  className="px-4 py-2 rounded-xl bg-surface-container-high text-on-surface font-body-sm text-body-sm hover:bg-surface-bright transition-colors"
+                  onClick={onClose}
+                >
+                  Close
+                </button>
+                <button
+                  className="px-4 py-2 rounded-xl bg-primary text-on-primary font-body-sm text-body-sm font-medium hover:bg-primary-container transition-colors shadow-sm"
+                  onClick={() => {
+                    showToast('Copied Manifest', 'Code schema copied to clipboard');
+                    onClose();
+                  }}
+                >
+                  Copy Manifest
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+export default CodeModal;
