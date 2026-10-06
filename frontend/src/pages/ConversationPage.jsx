@@ -219,36 +219,36 @@ const ConversationPage = ({ onOpenModelModal, onToggleLogsDrawer, showToast, sel
                 rows="2"
               ></textarea>
             </div>
-            <div className="flex items-center justify-between pt-2 border-t border-outline-variant/20">
-              <div className="flex items-center space-x-2">
+            <div className="flex items-center justify-between pt-2 border-t border-outline-variant/20 gap-2">
+              <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
                 <button
                   onClick={onOpenModelModal}
-                  className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs text-on-surface-variant hover:text-on-surface border border-outline-variant/30 transition-colors"
+                  className="flex items-center space-x-1 sm:space-x-1.5 px-1.5 sm:px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs text-on-surface-variant hover:text-on-surface border border-outline-variant/30 transition-colors"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                  <span>{selectedModel}</span>
+                  <span className="max-w-[60px] sm:max-w-[100px] truncate">{selectedModel}</span>
                 </button>
 
                 <button
                   onClick={() => showToast('Attachment', 'Document contextual reader ready (PDF/TXT/CSV).')}
-                  className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors"
+                  className="p-1 sm:p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors"
                   title="Attach documents or context"
                 >
-                  <span className="material-symbols-outlined text-[18px]">attach_file</span>
+                  <span className="material-symbols-outlined text-[16px] sm:text-[18px]">attach_file</span>
                 </button>
 
                 <button
                   onClick={() => setWebSearchOn(!webSearchOn)}
-                  className={`flex items-center space-x-1 px-2 py-1 rounded-lg text-xs transition-colors ${webSearchOn ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-surface-container text-on-surface-variant'}`}
+                  className={`flex items-center space-x-1 px-1.5 sm:px-2 py-1 rounded-lg text-xs transition-colors ${webSearchOn ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-surface-container text-on-surface-variant'}`}
                   title="Search web automatically"
                 >
                   <span className="material-symbols-outlined text-[14px]">public</span>
-                  <span className="hidden sm:inline">{webSearchOn ? 'Web Search On' : 'Search Off'}</span>
+                  <span className="hidden md:inline">{webSearchOn ? 'Web Search On' : 'Search Off'}</span>
                 </button>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <div className="hidden sm:flex items-center bg-surface-container-lowest p-0.5 rounded-lg border border-outline-variant/30 text-xs">
+              <div className="flex items-center space-x-2 flex-shrink-0">
+                <div className="hidden lg:flex items-center bg-surface-container-lowest p-0.5 rounded-lg border border-outline-variant/30 text-xs">
                   <button
                     onClick={() => setMode('Autonomous')}
                     className={`px-2 py-0.5 rounded ${mode === 'Autonomous' ? 'bg-primary-container/30 text-primary font-medium' : 'text-on-surface-variant hover:text-on-surface'}`}
@@ -265,10 +265,11 @@ const ConversationPage = ({ onOpenModelModal, onToggleLogsDrawer, showToast, sel
 
                 <button
                   onClick={handleSend}
-                  className="px-4 py-1.5 bg-primary text-on-primary font-medium text-body-sm rounded-xl hover:bg-primary-container transition-all flex items-center space-x-1.5 shadow-sm active:scale-95"
+                  className="px-3 sm:px-4 py-1.5 bg-primary text-on-primary font-medium text-body-sm rounded-xl hover:bg-primary-container transition-all flex items-center space-x-1 sm:space-x-1.5 shadow-sm active:scale-95"
                 >
-                  <span>Start Task</span>
-                  <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
+                  <span className="hidden sm:inline">Start Task</span>
+                  <span className="inline sm:hidden">Send</span>
+                  <span className="material-symbols-outlined text-[14px] sm:text-[16px]">arrow_upward</span>
                 </button>
               </div>
             </div>

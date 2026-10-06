@@ -331,11 +331,11 @@ const EcosystemToolsPage = ({ onInspectCode, showToast }) => {
                   </div>
 
                   <div className="mt-6 pt-4 space-y-2">
-                    <div className={`grid ${tool.isSynthesized ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}>
+                    <div className="flex flex-col xl:flex-row gap-2">
                       {tool.isSynthesized && (
                         <button
                           onClick={() => onInspectCode(tool.codeId)}
-                          className="py-2 px-3 rounded-xl bg-surface-container-low hover:bg-surface-bright text-on-surface font-body-sm text-xs font-medium text-center transition-colors shadow-sm"
+                          className="flex-1 py-2 px-3 rounded-xl bg-surface-container-low hover:bg-surface-bright text-on-surface font-body-sm text-xs font-medium text-center transition-colors shadow-sm whitespace-nowrap"
                         >
                           Inspect Code
                         </button>
@@ -343,13 +343,13 @@ const EcosystemToolsPage = ({ onInspectCode, showToast }) => {
                       <button
                         disabled={testingTool === tool.id}
                         onClick={() => handleTest(tool.id)}
-                        className="py-2 px-3 rounded-xl bg-surface-container-low hover:bg-surface-bright text-on-surface font-body-sm text-xs font-medium text-center transition-colors shadow-sm disabled:opacity-60"
+                        className="flex-1 py-2 px-3 rounded-xl bg-surface-container-low hover:bg-surface-bright text-on-surface font-body-sm text-xs font-medium text-center transition-colors shadow-sm disabled:opacity-60 whitespace-nowrap"
                       >
                         {testingTool === tool.id ? 'Testing...' : 'Test Tool'}
                       </button>
                       <button
                         onClick={() => showToast('Configuration', `Preferences opened for ${tool.name}`)}
-                        className={`py-2 px-3 rounded-xl font-body-sm text-xs font-semibold text-center transition-colors shadow-sm ${
+                        className={`flex-1 py-2 px-3 rounded-xl font-body-sm text-xs font-semibold text-center transition-colors shadow-sm whitespace-nowrap ${
                           tool.isSynthesized ? 'bg-primary text-on-primary hover:bg-primary-container' : 'bg-surface-container-low hover:bg-surface-bright text-on-surface'
                         }`}
                       >

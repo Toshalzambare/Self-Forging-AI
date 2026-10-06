@@ -69,15 +69,15 @@ const ModelModal = ({ isOpen, onClose, selectedModel, onSelectModel }) => {
               </label>
             </div>
 
-            <div className="flex justify-end pt-2 space-x-2 border-t border-outline-variant/20">
+            <div className="flex flex-col sm:flex-row justify-end pt-3 sm:pt-2 gap-2 sm:space-x-2 border-t border-outline-variant/20">
               <button
-                className="px-4 py-1.5 rounded-xl font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors"
+                className="px-4 py-2 sm:py-1.5 rounded-xl font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors order-2 sm:order-1"
                 onClick={onClose}
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-1.5 rounded-xl bg-primary text-on-primary font-medium font-body-sm text-body-sm hover:bg-primary-container transition-all"
+                className="px-4 py-2 sm:py-1.5 rounded-xl bg-primary text-on-primary font-medium font-body-sm text-body-sm hover:bg-primary-container transition-all order-1 sm:order-2 shadow-sm"
                 onClick={() => {
                   onSelectModel(current);
                   onClose();
