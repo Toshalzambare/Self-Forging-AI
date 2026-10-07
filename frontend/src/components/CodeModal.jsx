@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { APP_NAME } from '../config.js';
 
 const CodeModal = ({ isOpen, onClose, toolName, showToast }) => {
       if (!isOpen) return null;
@@ -21,7 +22,7 @@ def run_analytical_query(ctx: Context, query_pattern: str):
         return {"rows": cur.fetchall(), "count": cur.rowcount}`
         : `import os
 import requests
-from twinkle.mcp import register_tool, Context
+from {APP_NAME.toLowerCase().replace(' ', '-')}.mcp import register_tool, Context
 
 @register_tool(
     name="notion_digest_sync",
@@ -73,7 +74,7 @@ def sync_financial_cards(ctx: Context, payload: list[dict]):
               </button>
             </div>
             <div className="p-4 sm:p-5 overflow-y-auto font-mono text-body-sm text-on-surface bg-surface-container-lowest/80 space-y-2">
-              <div className="text-tertiary text-[10px] sm:text-xs"># Generated autonomously by Twinkle Agent [Model: Claude 3.7 Sonnet]</div>
+              <div className="text-tertiary text-[10px] sm:text-xs"># Generated autonomously by {APP_NAME} [Model: Claude 3.7 Sonnet]</div>
               <div className="text-tertiary text-[10px] sm:text-xs"># Verification: AST static analysis passed | Output schema locked</div>
               <pre className="text-primary-fixed-dim whitespace-pre-wrap leading-relaxed mt-2 text-[11px] sm:text-sm overflow-x-auto">
                 {codeContent}

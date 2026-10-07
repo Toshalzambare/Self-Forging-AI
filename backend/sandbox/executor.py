@@ -41,21 +41,22 @@ def execute_in_sandbox(code: str, tests: str) -> Tuple[bool, str]:
                 command=command,
                 volumes={temp_dir: {'bind': '/app', 'mode': 'ro'}},
                 working_dir='/app',
-                remove=True, # Auto-remove container when done
+                remove=False, # We will remove it manually to get logs if it fails
                 network_mode=config.DOCKER_SANDBOX_NETWORK,
                 mem_limit=config.DOCKER_SANDBOX_MEMORY_LIMIT,
-                detach=False, # Wait for container to finish
+                detach=True, # Run detached so we can manage it
                 stderr=True,
                 stdout=True
             )
             
-            # If run completes without exception, exit code is 0 (Tests passed)
-            return True, container.decode('utf-8')
+            result = container.wait()
+            logs = container.logs().decode('utf-8')
+            container.remove()
             
-        except docker.errors.ContainerError as e:
-            # Pytest failed (exit code != 0)
-            logs = e.container.logs().decode('utf-8') if e.container else str(e)
-            return False, f"Tests Failed:\n{logs}"
+            if result['StatusCode'] == 0:
+                return True, logs
+            else:
+                return False, f"Tests Failed:\n{logs}"
             
         except docker.errors.ImageNotFound:
             return False, f"Docker image {config.DOCKER_SANDBOX_IMAGE} not found. Please pull it first."

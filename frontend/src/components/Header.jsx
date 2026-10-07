@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, Link } from 'react-router-dom';
+import { APP_NAME } from '../config.js';
 
-const Header = ({ onOpenModelModal, onOpenSettingsModal, onToggleLogsDrawer, selectedModel }) => {
+const Header = ({ onOpenModelModal, onOpenSettingsModal, onToggleLogsDrawer, selectedModel, user, onLogout }) => {
       const location = useLocation();
       const currentPath = location.pathname;
 
       const navLinks = [
         { path: '/', label: 'Conversation', icon: 'forum' },
-        { path: '/ecosystem-tools', label: 'Ecosystem & Tools', count: '24', icon: 'extension' },
+        { path: '/ecosystem-tools', label: 'Ecosystem & Tools', icon: 'extension' },
         { path: '/activity-logs', label: 'Activity & Logs', icon: 'browse_activity' },
         { path: '/api-settings', label: 'API & Settings', icon: 'tune' }
       ];
@@ -23,10 +24,10 @@ const Header = ({ onOpenModelModal, onOpenSettingsModal, onToggleLogsDrawer, sel
                 </div>
                 <div className="flex flex-col justify-center">
                   <div className="flex items-center space-x-2">
-                    <span className="font-headline-sm text-[16px] sm:text-headline-sm font-semibold tracking-tight text-on-surface">Twinkle</span>
-                    <span className="hidden lg:inline-flex px-2 py-0.5 rounded-full bg-primary-container/15 text-primary font-label-sm text-label-sm border border-primary/20">Task Partner</span>
+                    <span className="font-headline-sm text-[16px] sm:text-headline-sm font-semibold tracking-tight text-on-surface">{APP_NAME}</span>
+                    <span className="hidden lg:inline-flex px-2 py-0.5 rounded-full bg-primary-container/15 text-primary font-label-sm text-label-sm border border-primary/20">AI Agent</span>
                   </div>
-                  <p className="hidden md:block font-label-sm text-[11px] text-on-surface-variant font-normal leading-tight truncate">Your personal autonomous companion</p>
+                  <p className="hidden md:block font-label-sm text-[11px] text-on-surface-variant font-normal leading-tight truncate">Self-Forging · Tool Generation · Sandbox Testing</p>
                 </div>
               </Link>
 
@@ -77,7 +78,7 @@ const Header = ({ onOpenModelModal, onOpenSettingsModal, onToggleLogsDrawer, sel
                 className="hidden 2xl:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 text-on-surface-variant font-body-sm text-body-sm transition-colors no-underline"
               >
                 <span className="material-symbols-outlined text-[16px] text-primary">hub</span>
-                <span className="text-on-surface font-medium">24 Tools Ready</span>
+                <span className="text-on-surface font-medium">Tools Registry</span>
               </Link>
 
               {/* Activity Feed Quick Toggle */}
@@ -90,22 +91,28 @@ const Header = ({ onOpenModelModal, onOpenSettingsModal, onToggleLogsDrawer, sel
                 <span className="hidden md:inline w-1.5 h-1.5 rounded-full bg-secondary"></span>
               </button>
 
-              {/* User Profile */}
-              <Link
-                to="/api-settings"
-                className="flex items-center space-x-2.5 pl-1 sm:pl-2 border-l border-outline-variant/30 no-underline"
-                title="Elena Vance Profile & Settings"
-              >
-                <div className="flex items-center space-x-2 py-1 px-1.5 sm:px-2.5 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/25 transition-colors">
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary-container/30 border border-primary/40 flex items-center justify-center text-primary text-[10px] sm:text-xs font-semibold flex-shrink-0">
-                    EA
+              {/* User Profile + Logout */}
+              <div className="flex items-center space-x-1 pl-1 sm:pl-2 border-l border-outline-variant/30">
+                <Link
+                  to="/api-settings"
+                  className="flex items-center space-x-2 py-1 px-1.5 sm:px-2.5 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/25 transition-colors no-underline"
+                >
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary-container/30 border border-primary/40 flex items-center justify-center text-primary text-[10px] sm:text-xs font-semibold flex-shrink-0 uppercase">
+                    {user?.username?.slice(0, 2) || 'U'}
                   </div>
                   <div className="hidden xl:flex flex-col text-left">
-                    <span className="text-xs font-medium text-on-surface leading-tight">Elena Vance</span>
-                    <span className="text-[10px] text-emerald-400 leading-tight font-medium">Connected &amp; Ready</span>
+                    <span className="text-xs font-medium text-on-surface leading-tight">{user?.username || 'User'}</span>
+                    <span className="text-[10px] text-emerald-400 leading-tight font-medium">Online</span>
                   </div>
-                </div>
-              </Link>
+                </Link>
+                <button
+                  onClick={onLogout}
+                  className="p-1.5 rounded-lg text-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  title="Sign out"
+                >
+                  <span className="material-symbols-outlined text-[17px]">logout</span>
+                </button>
+              </div>
             </div>
           </div>
         </header>

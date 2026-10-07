@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { APP_NAME } from '../config.js';
 
-const ApiSettingsPage = ({ showToast }) => {
+const ApiSettingsPage = ({ showToast, user }) => {
       const [activeTab, setActiveTab] = useState('providers');
       const [showAnthropicKey, setShowAnthropicKey] = useState(false);
       const [showOpenAIKey, setShowOpenAIKey] = useState(false);
@@ -124,7 +125,7 @@ const ApiSettingsPage = ({ showToast }) => {
                   <span className="font-mono text-xs font-semibold">Active Session Socket</span>
                 </div>
                 <p className="font-mono text-[11px] text-tertiary-fixed-dim leading-relaxed break-all">
-                  wss://twinkle.local/rpc/v1#ea-908
+                  wss://{APP_NAME}.local/rpc/v1#ea-908
                 </p>
                 <div className="text-[11px] text-on-surface-variant flex items-center justify-between pt-1">
                   <span>Heartbeat: 4s</span>
@@ -141,7 +142,7 @@ const ApiSettingsPage = ({ showToast }) => {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                       <h2 className="font-headline-md text-headline-md font-semibold text-on-surface">AI Model Providers &amp; Credentials</h2>
-                      <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Securely store encrypted authorization tokens locally. Twinkle routes tasks to optimal LLMs dynamically.</p>
+                      <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Securely store encrypted authorization tokens locally. {APP_NAME} routes tasks to optimal LLMs dynamically.</p>
                     </div>
                     <button
                       onClick={() => showToast('Model Manifest', 'Custom model descriptor wizard launched.')}
@@ -409,7 +410,7 @@ const ApiSettingsPage = ({ showToast }) => {
                             <span className="material-symbols-outlined text-primary text-[18px]">folder_special</span>
                             <div>
                               <div className="font-body-sm text-body-sm font-medium text-on-surface">Filesystem MCP</div>
-                              <div className="text-[10px] text-tertiary font-mono">/Users/elena/Projects</div>
+                              <div className="text-[10px] text-tertiary font-mono">/Users/{user?.username?.toLowerCase() || 'user'}/Projects</div>
                             </div>
                           </div>
                           <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
@@ -447,7 +448,7 @@ const ApiSettingsPage = ({ showToast }) => {
                 <div className="space-y-6">
                   <div>
                     <h2 className="font-headline-md text-headline-md font-semibold text-on-surface">Autonomy &amp; Human Guardrails</h2>
-                    <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Define how freely Twinkle can synthesize new scripts, run bash terminal instructions, and expend task tokens.</p>
+                    <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Define how freely {APP_NAME} can synthesize new scripts, run bash terminal instructions, and expend task tokens.</p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -473,7 +474,7 @@ const ApiSettingsPage = ({ showToast }) => {
                           <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary font-label-sm text-[10px] font-semibold">Recommended</span>
                         </div>
                         <p className="font-body-sm text-xs text-on-surface-variant mt-1.5 leading-relaxed">
-                          Twinkle writes, tests, and runs newly synthesized Python tools in the local sandbox without prompting for confirmation on each sub-step.
+                          {APP_NAME} writes, tests, and runs newly synthesized Python tools in the local sandbox without prompting for confirmation on each sub-step.
                         </p>
                       </div>
                       <div className="mt-4 pt-3 flex items-center justify-between text-[11px] text-tertiary-fixed-dim border-t border-outline-variant/10">
@@ -501,7 +502,7 @@ const ApiSettingsPage = ({ showToast }) => {
                       <div className="mt-4">
                         <h4 className="font-body-lg text-body-lg font-semibold text-on-surface">Guided Mode (Human-in-the-Loop)</h4>
                         <p className="font-body-sm text-xs text-on-surface-variant mt-1.5 leading-relaxed">
-                          Twinkle pauses and presents proposed code diffs, file writes, and network calls for your one-click approval before running them.
+                          {APP_NAME} pauses and presents proposed code diffs, file writes, and network calls for your one-click approval before running them.
                         </p>
                       </div>
                       <div className="mt-4 pt-3 flex items-center justify-between text-[11px] text-tertiary-fixed-dim border-t border-outline-variant/10">
@@ -547,7 +548,7 @@ const ApiSettingsPage = ({ showToast }) => {
                           </div>
                           <div>
                             <div className="font-body-md text-body-md font-medium text-on-surface">Max Spend Cap per Single Task</div>
-                            <div className="font-body-sm text-xs text-on-surface-variant">Twinkle aborts recursive reasoning loops if estimated token cost exceeds cap</div>
+                            <div className="font-body-sm text-xs text-on-surface-variant">{APP_NAME} aborts recursive reasoning loops if estimated token cost exceeds cap</div>
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -577,17 +578,17 @@ const ApiSettingsPage = ({ showToast }) => {
                         <div className="relative">
                           <img
                             className="w-16 h-16 rounded-2xl object-cover shadow-md"
-                            alt="Elena Vance"
+                            alt="{user?.username || 'User'}"
                             src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6xqg8kdzgY1Ssq3XtQV1J4h7Yinun0DGEN-bos_6UXZr8NFxJ4J1bezVlom2MjDG1zjxNIePUDoB77mgth1hwQ22M5bTmEi6k9EG46TWRJKh35m6RGVmERNydYG9pZNMzpdz9WNg4-YwCXGM6YoBiEacd5gQTHxeqjVSV6dOKG0gLCbaAcSDBHCdXam_6FRIKiiKwuz1r57cVAowFW2Skd0lOouFT50Uq0djAvUBmnxhk1DLsm-82-A"
                           />
                           <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-surface-container-low"></span>
                         </div>
                         <div>
                           <div className="flex items-center space-x-2">
-                            <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface">Elena Vance</h3>
+                            <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface">{user?.username || 'User'}</h3>
                             <span className="px-2.5 py-0.5 rounded-full bg-primary/20 text-primary font-label-sm text-[11px] font-semibold">Pro Partner</span>
                           </div>
-                          <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">elena.vance@twinkle-research.io • Seat ID #EA-771</p>
+                          <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">{user?.username?.toLowerCase() || 'user'}.vance@{APP_NAME}-research.io • Seat ID #EA-771</p>
                           <div className="flex items-center space-x-3 mt-1.5 text-xs text-tertiary font-mono">
                             <span>Cluster: US-West-2</span>
                             <span>•</span>

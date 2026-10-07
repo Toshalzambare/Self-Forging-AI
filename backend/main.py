@@ -1,72 +1,170 @@
 """
 Self-Forging AI Agent - FastAPI Backend Entry Point
-
-This is the main server that:
-1. Serves the REST API and WebSocket connections for the frontend
-2. Hosts the LangGraph agent orchestration
-3. Manages the Docker sandbox lifecycle
-4. Runs the MCP tool registry
 """
 
-from fastapi import FastAPI
+import uuid
+import asyncio
+from typing import Optional
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from langchain_core.messages import HumanMessage
 
 from config import config
+from agents.graph import build_graph
+import tool_registry as registry
 
 app = FastAPI(
-    title="Self-Forging AI Agent",
+    title=config.APP_NAME,
     description="An autonomous AI agent that forges, tests, and registers its own tools at runtime.",
-    version="0.1.0",
+    version=config.APP_VERSION,
 )
 
-# Allow frontend dev server to connect
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",   # Vite dev server
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=config.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Build the LangGraph once at startup
+graph = None
 
 @app.on_event("startup")
 async def startup():
-    """Run on server start: validate config, init DB, etc."""
+    global graph
     warnings = config.validate()
     if warnings:
         for w in warnings:
-            print(f"⚠️  CONFIG WARNING: {w}")
+            print(f"CONFIG WARNING: {w}")
     else:
-        print("✅ Configuration loaded successfully.")
+        print("Configuration loaded successfully.")
+    print(f"OmniRoute endpoint: {config.OMNIROUTE_BASE_URL}")
+    print(f"Default model: {config.OMNIROUTE_MODEL}")
+    
+    # Initialize SQLite Registry
+    registry.init_db()
+    
+    graph = build_graph()
+    print("LangGraph agent compiled and ready.")
 
-    print(f"🔌 OmniRoute endpoint: {config.OMNIROUTE_BASE_URL}")
-    print(f"🤖 Default model: {config.OMNIROUTE_MODEL}")
-    print(f"🐳 Sandbox image: {config.DOCKER_SANDBOX_IMAGE}")
-    print(f"📦 Tool registry DB: {config.REGISTRY_DB_PATH}")
 
+# ============================================================
+# Pydantic Models
+# ============================================================
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    session_id: str
+    reply: str
+    forged_tool: Optional[dict] = None
+    sandbox_results: Optional[str] = None
+    tests_passed: Optional[bool] = None
+    repair_attempts: Optional[int] = None
+    is_tool_forged: bool = False
+
+
+# ============================================================
+# Health
+# ============================================================
 
 @app.get("/")
 async def root():
-    return {
-        "name": "Self-Forging AI Agent",
-        "version": "0.1.0",
-        "status": "running",
-    }
-
+    return {"name": config.APP_NAME, "version": config.APP_VERSION, "status": "running"}
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "graph_ready": graph is not None}
 
 
 # ============================================================
-# API Routes (will be added in later phases)
+# Chat Endpoint  
 # ============================================================
-# POST /api/chat          - Send a message to the agent
-# WS   /ws/forge          - WebSocket for real-time forge logs
-# GET  /api/tools          - List all registered tools
-# GET  /api/tools/{id}     - Get a specific tool's details
-# DELETE /api/tools/{id}   - Remove a tool from the registry
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(req: ChatRequest):
+    """
+    Main chat endpoint. Sends the user message through the LangGraph pipeline.
+    Handles both simple replies and tool-forging workflows.
+    """
+    if not graph:
+        raise HTTPException(status_code=503, detail="Agent not ready yet.")
+
+    session_id = req.session_id or str(uuid.uuid4())
+
+    initial_state = {
+        "messages": [HumanMessage(content=req.message)],
+        "task": req.message,
+        "missing_capability": "",
+        "generated_code": "",
+        "generated_schema": {},
+        "adversarial_tests": "",
+        "sandbox_results": "",
+        "tests_passed": False,
+        "repair_attempts": 0
+    }
+
+    try:
+        final_state = await graph.ainvoke(initial_state)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
+
+    messages = final_state.get("messages", [])
+    # Get last assistant message
+    reply = ""
+    for m in reversed(messages):
+        content = m.content if hasattr(m, "content") else m.get("content", "")
+        role = m.type if hasattr(m, "type") else m.get("role", "")
+        if role in ("ai", "assistant") or (hasattr(m, "type") and m.type == "ai"):
+            reply = content
+            break
+    if not reply and messages:
+        last = messages[-1]
+        reply = last.content if hasattr(last, "content") else last.get("content", "")
+
+    is_tool_forged = bool(final_state.get("generated_code"))
+    forged_tool = None
+    if is_tool_forged:
+        forged_tool = {
+            "code": final_state.get("generated_code", ""),
+            "schema": final_state.get("generated_schema", {}),
+            "tests": final_state.get("adversarial_tests", ""),
+        }
+        
+        # Save to registry if tests passed
+        if final_state.get("tests_passed"):
+            tool_id = str(uuid.uuid4())
+            name = final_state.get("generated_schema", {}).get("name", f"tool_{tool_id[:8]}")
+            desc = final_state.get("generated_schema", {}).get("description", "")
+            registry.add_tool(
+                tool_id=tool_id,
+                name=name,
+                description=desc,
+                code=forged_tool["code"],
+                schema=forged_tool["schema"]
+            )
+
+    return ChatResponse(
+        session_id=session_id,
+        reply=reply,
+        forged_tool=forged_tool,
+        sandbox_results=final_state.get("sandbox_results"),
+        tests_passed=final_state.get("tests_passed"),
+        repair_attempts=final_state.get("repair_attempts"),
+        is_tool_forged=is_tool_forged,
+    )
+
+
+# ============================================================
+# Tools Registry Endpoints
+# ============================================================
+
+@app.get("/api/tools")
+async def list_tools():
+    """List all forged and registered tools."""
+    tools = registry.list_tools()
+    return {"tools": tools, "count": len(tools)}

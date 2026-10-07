@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { APP_NAME } from '../config.js';
 
-const ActivityLogsPage = ({ showToast }) => {
+const ActivityLogsPage = ({ showToast, user }) => {
       const [filterCategory, setFilterCategory] = useState('all');
       const [openAccordion, setOpenAccordion] = useState({
         step1: true,
@@ -23,11 +24,11 @@ const ActivityLogsPage = ({ showToast }) => {
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
                 <span className="font-label-sm text-label-sm uppercase tracking-wider text-primary">Autonomous Audit Trail</span>
                 <span className="text-on-surface-variant/40 font-mono text-body-sm">•</span>
-                <span className="font-mono text-body-sm text-on-surface-variant">Host: twinkle-core-v2.8</span>
+                <span className="font-mono text-body-sm text-on-surface-variant">Host: {APP_NAME}-core-v2.8</span>
               </div>
               <h1 className="font-headline-lg text-headline-lg font-semibold text-on-surface tracking-tight">Activity &amp; Execution Logs</h1>
               <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl mt-1">
-                Inspect Twinkle's thought chains, internet queries, verified sandbox code, and external tool calls in plain, transparent terms.
+                Inspect {APP_NAME}'s thought chains, internet queries, verified sandbox code, and external tool calls in plain, transparent terms.
               </p>
             </div>
 
@@ -118,7 +119,7 @@ const ActivityLogsPage = ({ showToast }) => {
                     GitHub Issue Triage &amp; Bug Report
                   </h2>
                   <p className="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mt-1">
-                    Tagged 14 inbound issues on repo twinkle-core, isolated repro stack traces for #412.
+                    Tagged 14 inbound issues on repo {APP_NAME}-core, isolated repro stack traces for #412.
                   </p>
                   <div className="flex items-center gap-2 mt-3 pt-2 text-on-surface-variant font-mono text-body-sm">
                     <span className="flex items-center space-x-1">
@@ -309,7 +310,7 @@ const ActivityLogsPage = ({ showToast }) => {
                     {openAccordion.step1 && (
                       <div className="mt-4 pt-4 bg-surface-container/50 rounded-xl p-4 space-y-3">
                         <div className="font-body-md text-body-md text-on-surface-variant leading-relaxed">
-                          <span className="text-on-surface font-semibold">Twinkle's Internal Reflection: </span>
+                          <span className="text-on-surface font-semibold">{APP_NAME}'s Internal Reflection: </span>
                           "The scheduled directive is to generate Elena's 08:00 AM macro briefing. I need fresh equity index futures, current Treasury yield curves, and overnight corporate earnings sentiment. Since Notion's REST block connector accepts markdown bodies, I will query live financial indices first, extract the top 3 headlines, and write a temporary sync script to commit to the Executive Notebook page."
                         </div>
                         <div className="flex flex-wrap items-center gap-2 pt-2">
@@ -357,7 +358,7 @@ const ActivityLogsPage = ({ showToast }) => {
                     {openAccordion.step2 && (
                       <div className="mt-4 pt-4 space-y-3">
                         <p className="font-body-sm text-body-sm text-on-surface-variant">
-                          Twinkle spawned 3 parallel headless search threads via Brave Search MCP API and summarized source payloads:
+                          {APP_NAME} spawned 3 parallel headless search threads via Brave Search MCP API and summarized source payloads:
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
                           <div className="bg-surface-container rounded-xl p-3.5 shadow-sm flex flex-col justify-between">
@@ -533,7 +534,7 @@ const ActivityLogsPage = ({ showToast }) => {
                             <span className="font-mono text-body-sm text-on-surface-variant">Block ID: 8bf2e...441a</span>
                           </div>
                           <p className="font-body-sm text-body-sm text-on-surface-variant">
-                            Created new subpage in workspace <span className="text-on-surface font-medium">"Elena's Strategic Command"</span> &gt; <span className="text-on-surface font-medium">"Daily Briefings 2025"</span>. Dispatched Webhook confirmation to Twinkle Mobile push notification channel.
+                            Created new subpage in workspace <span className="text-on-surface font-medium">"Elena's Strategic Command"</span> &gt; <span className="text-on-surface font-medium">"Daily Briefings 2025"</span>. Dispatched Webhook confirmation to {APP_NAME} Mobile push notification channel.
                           </p>
                           <div className="flex items-center gap-3 pt-2">
                             <button

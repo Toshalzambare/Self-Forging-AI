@@ -1,82 +1,42 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { apiFetch, APP_NAME } from '../config.js';
 
-const EcosystemToolsPage = ({ onInspectCode, showToast }) => {
+const EcosystemToolsPage = ({ onInspectCode, showToast, user }) => {
       const [filterCategory, setFilterCategory] = useState('all');
       const [searchQuery, setSearchQuery] = useState('');
       const [testingTool, setTestingTool] = useState(null);
 
-      const allTools = [
-        {
-          id: 'notion',
-          name: 'NotionDigestSync',
-          category: 'synthesized productivity',
-          isSynthesized: true,
-          synthBadge: 'Synthesized by Agent 15m ago',
-          desc: 'Parses financial market news and pushes structured card databases with stock tickers, sentiment metrics, and executive summaries directly into user workspace.',
-          metricLabel: 'Used in 1 task',
-          metricVal: '0 errors',
-          metricIcon: 'query_stats',
-          codeId: 'NotionDigestSync'
-        },
-        {
-          id: 'crawler',
-          name: 'Web Search & Crawler',
-          category: 'mcp research',
-          isSynthesized: false,
-          badge: 'MCP Official',
-          desc: 'Ultra-low latency web discovery with headless JavaScript evaluation, Markdown cleaning, and selective content extraction.',
-          metricLabel: '182 calls today',
-          metricVal: '142ms avg',
-          metricIcon: 'speed'
-        },
-        {
-          id: 'github',
-          name: 'GitHub PR Automator',
-          category: 'mcp productivity',
-          isSynthesized: false,
-          badge: 'Active Hook',
-          badgeEmerald: true,
-          desc: 'Monitors repo pull requests, drafts unit tests, signs verified commits with GPG, and submits inline code review responses.',
-          metricLabel: '12 merged PRs',
-          metricVal: 'Verified GPG',
-          metricIcon: 'commit'
-        },
-        {
-          id: 'sandbox',
-          name: 'Python Sandbox Runner',
-          category: 'mcp data',
-          isSynthesized: false,
-          badge: 'Isolated gVisor',
-          desc: 'Zero-network execution environment for dataframes, statistical modeling, algorithmic transforms, and matplotlib rendering.',
-          metricLabel: 'Python 3.12.2',
-          metricVal: '1GB / 2vCPU',
-          metricIcon: 'memory'
-        },
-        {
-          id: 'slack',
-          name: 'Slack Dispatcher',
-          category: 'mcp productivity',
-          isSynthesized: false,
-          badge: '#daily-briefings',
-          desc: 'Formatted morning rollups and immediate task alerts dispatched directly to your team or private workspace direct messages.',
-          metricLabel: '4 channels bound',
-          metricVal: 'OAuth OK',
-          metricIcon: 'send'
-        },
-        {
-          id: 'sql',
-          name: 'SQL Query Synthesizer',
-          category: 'synthesized data',
-          isSynthesized: true,
-          synthBadge: 'Synthesized Yesterday',
-          desc: 'Auto-discovers Supabase and PostgreSQL database constraints to formulate read-only analytical aggregations without manual schema declaration.',
-          metricLabel: '4 queries run',
-          metricVal: '100% Read Safe',
-          metricIcon: 'data_object',
-          codeId: 'SQLSynthesizer'
-        }
-      ];
+      const [allTools, setAllTools] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      useEffect(() => {
+        const fetchTools = async () => {
+          try {
+            const data = await apiFetch('/api/tools');
+            const mappedTools = (data.tools || []).map(t => ({
+                id: t.id,
+                name: t.name,
+                desc: t.description || 'No description provided.',
+                category: 'synthesized',
+                isSynthesized: true,
+                synthBadge: 'Custom Built',
+                codeId: t.name,
+                metricIcon: 'terminal',
+                metricLabel: 'Created',
+                metricVal: new Date(t.created_at).toLocaleDateString(),
+                code: t.code
+            }));
+            setAllTools(mappedTools);
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        };
+        fetchTools();
+      }, []);
 
       const handleTest = (toolId) => {
         setTestingTool(toolId);
@@ -109,7 +69,7 @@ const EcosystemToolsPage = ({ onInspectCode, showToast }) => {
                     Ecosystem &amp; Tools
                   </h1>
                   <p className="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-                    Twinkle operates with verified Model Context Protocol connectors and independently writes, sandboxes, and verifies custom micro-tools whenever novel capabilities are required.
+                    {APP_NAME} operates with verified Model Context Protocol connectors and independently writes, sandboxes, and verifies custom micro-tools whenever novel capabilities are required.
                   </p>
                 </div>
 
@@ -121,7 +81,7 @@ const EcosystemToolsPage = ({ onInspectCode, showToast }) => {
                       <span className="material-symbols-outlined text-primary text-[20px]">hub</span>
                     </div>
                     <div className="mt-3 flex items-baseline space-x-2">
-                      <span className="font-headline-lg text-headline-lg font-semibold text-on-surface">24</span>
+                      <span className="font-headline-lg text-headline-lg font-semibold text-on-surface">{allTools.length}</span>
                       <span className="font-body-sm text-body-sm text-primary">Active</span>
                     </div>
                   </div>
@@ -149,7 +109,7 @@ const EcosystemToolsPage = ({ onInspectCode, showToast }) => {
               </div>
             </div>
 
-            {/* Educational Banner: How Twinkle Creates Tools */}
+            {/* Educational Banner: How {APP_NAME} Creates Tools */}
             <div className="relative overflow-hidden rounded-xl bg-surface-container shadow-lg p-6 lg:p-8">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6">
                 <div>
@@ -159,10 +119,10 @@ const EcosystemToolsPage = ({ onInspectCode, showToast }) => {
                     <span className="font-label-sm text-label-sm text-on-surface-variant">Autonomous Loop</span>
                   </div>
                   <h2 className="font-headline-md text-headline-md text-on-surface font-semibold mt-1">
-                    How Twinkle creates tools on the fly
+                    How {APP_NAME} creates tools on the fly
                   </h2>
                   <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 max-w-xl">
-                    Never get blocked by missing integrations. When you ask for complex workflows, Twinkle drafts secure Python tools in real time.
+                    Never get blocked by missing integrations. When you ask for complex workflows, {APP_NAME} drafts secure Python tools in real time.
                   </p>
                 </div>
                 <div className="flex items-center space-x-3">
@@ -253,7 +213,7 @@ const EcosystemToolsPage = ({ onInspectCode, showToast }) => {
 
                 <div className="flex items-center space-x-2 overflow-x-auto pb-1">
                   {[
-                    { id: 'all', label: 'All Tools (24)' },
+                    { id: 'all', label: 'All Tools ({allTools.length})' },
                     { id: 'mcp', label: 'Built-in MCP' },
                     { id: 'synthesized', label: 'Autonomous / Synthesized (3)' },
                     { id: 'productivity', label: 'Notion & Productivity' },
@@ -313,7 +273,7 @@ const EcosystemToolsPage = ({ onInspectCode, showToast }) => {
                       <div className="flex items-center space-x-2">
                         <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface">{tool.name}</h3>
                         {tool.isSynthesized && (
-                          <span className="material-symbols-outlined text-primary text-[18px] material-symbols-fill" title="Twinkle Custom Created">verified</span>
+                          <span className="material-symbols-outlined text-primary text-[18px] material-symbols-fill" title="{APP_NAME} Custom Created">verified</span>
                         )}
                       </div>
                       <p className="font-body-sm text-body-sm text-on-surface-variant mt-2 leading-relaxed">
