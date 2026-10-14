@@ -45,6 +45,7 @@ export function useConversationManager(showToast) {
     setIsLoadingMessages(true);
     try {
       const data = await apiFetch(`/api/conversations/${convId}`);
+      if (activeIdRef.current !== convId) return;
       setMessages(data.messages || []);
       localStorage.setItem(STORAGE_KEY_ACTIVE_CONV, convId);
     } catch (err) {

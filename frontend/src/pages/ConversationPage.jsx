@@ -48,7 +48,7 @@ const ConversationPage = ({
   const activeConv = conversations.find((c) => c.id === activeId);
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] pt-16 overflow-hidden bg-slate-950 text-slate-100">
+    <div className="flex h-[100dvh] pt-16 overflow-hidden bg-slate-950 text-slate-100">
       {/* Collapsible Left Sidebar */}
       <ConversationSidebar
         isOpen={isSidebarOpen}
@@ -139,9 +139,19 @@ const ConversationPage = ({
               <EmptyChatStarters onSelectPrompt={(p) => sendMessage(p)} />
             ) : (
               <>
-                {messages.map((m) => (
-                  <ChatMessage key={m.id} message={m} onRetry={() => sendMessage(m.content)} />
-                ))}
+                {messages.map((m, idx) => {
+                  const prevUser = messages
+                    .slice(0, idx)
+                    .reverse()
+                    .find((x) => x.role === 'user');
+                  return (
+                    <ChatMessage
+                      key={m.id}
+                      message={m}
+                      onRetry={prevUser ? () => sendMessage(prevUser.content) : undefined}
+                    />
+                  );
+                })}
 
                 {/* Animated Forge Reasoning Banner */}
                 {activeForgeState && <ForgeStateBanner state={activeForgeState} />}

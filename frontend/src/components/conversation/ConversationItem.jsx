@@ -115,7 +115,7 @@ const ConversationItem = ({
                 type="button"
                 onClick={() => {
                   setMenuOpen(false);
-                  onTogglePin(conversation.id, !conversation.is_pinned);
+                  onTogglePin(conversation.id, conversation.is_pinned);
                 }}
                 className="w-full flex items-center space-x-2 px-3 py-1.5 text-xs text-slate-300 hover:bg-indigo-600/20 hover:text-white transition"
               >

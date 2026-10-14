@@ -370,15 +370,41 @@ async def update_provider(
     req: ProviderUpdate,
     current_user: User = Depends(get_current_user),
 ):
-    """Update or save API key / active status for a model provider."""
+    """Update or save API key / active status for a model provider with tenant isolation."""
+    user_id_str = str(current_user.id)
     async with get_db() as db:
-        provider = await RegistryRepository.get_provider(db, provider_id=provider_id, user_id=str(current_user.id))
+        provider = await RegistryRepository.get_provider(db, provider_id=provider_id, user_id=user_id_str)
         if not provider:
             raise HTTPException(status_code=404, detail="Provider not found")
-        if req.api_key is not None:
-            provider.api_key = req.api_key
-        if req.is_active is not None:
-            provider.is_active = req.is_active
+
+        # If this is a global provider (user_id is None), do not mutate shared row.
+        # Instead, create or update a user-scoped override row.
+        if provider.user_id is None:
+            user_override_id = f"{provider.id}_{user_id_str[:8]}"
+            user_override = await RegistryRepository.get_provider(db, provider_id=user_override_id, user_id=user_id_str)
+            if not user_override:
+                user_override = Provider(
+                    id=user_override_id,
+                    user_id=user_id_str,
+                    name=provider.name,
+                    description=provider.description,
+                    api_key=req.api_key if req.api_key is not None else provider.api_key,
+                    is_active=req.is_active if req.is_active is not None else provider.is_active,
+                )
+                db.add(user_override)
+            else:
+                if req.api_key is not None:
+                    user_override.api_key = req.api_key
+                if req.is_active is not None:
+                    user_override.is_active = req.is_active
+        else:
+            if str(provider.user_id) != user_id_str:
+                raise HTTPException(status_code=403, detail="Access denied to provider settings")
+            if req.api_key is not None:
+                provider.api_key = req.api_key
+            if req.is_active is not None:
+                provider.is_active = req.is_active
+
         await db.commit()
         return {"status": "success", "message": f"Settings updated for {provider.name}"}
 
