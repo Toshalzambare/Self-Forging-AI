@@ -21,6 +21,8 @@ class Config:
     OMNIROUTE_BASE_URL: str = os.getenv("OMNIROUTE_BASE_URL", "http://localhost:20128/v1")
     OMNIROUTE_API_KEY: str = os.getenv("OMNIROUTE_API_KEY", "")
     OMNIROUTE_MODEL: str = os.getenv("OMNIROUTE_MODEL", "auto")
+    LLM_REQUEST_TIMEOUT: int = int(os.getenv("LLM_REQUEST_TIMEOUT", "60"))
+    LLM_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "3"))
 
     # Docker Sandbox
     DOCKER_SANDBOX_IMAGE: str = os.getenv("DOCKER_SANDBOX_IMAGE", "sfa-sandbox:latest")

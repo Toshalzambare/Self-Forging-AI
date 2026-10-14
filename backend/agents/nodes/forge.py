@@ -2,6 +2,7 @@ import json
 from pydantic import BaseModel, Field
 from agents.state import AgentState
 from agents.llm import llm
+from agents.utils import extract_json_from_text
 from langchain_core.messages import SystemMessage, HumanMessage
 
 async def forge_node(state: AgentState) -> dict:
@@ -34,13 +35,8 @@ Return ONLY a valid JSON object with EXACTLY these two keys:
     response = await llm.ainvoke([sys_prompt, user_prompt])
     content = response.content
     
-    if content.startswith("```json"):
-        content = content.replace("```json", "", 1)
-    if content.endswith("```"):
-        content = content[:-3]
-        
     try:
-        data = json.loads(content.strip())
+        data = extract_json_from_text(content)
         python_code = data.get("python_code", "")
         json_schema = data.get("json_schema", {})
     except Exception as e:

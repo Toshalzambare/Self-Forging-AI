@@ -2,6 +2,7 @@ import json
 from pydantic import BaseModel, Field
 from agents.state import AgentState
 from agents.llm import llm
+from agents.utils import extract_json_from_text
 from langchain_core.messages import SystemMessage, HumanMessage
 
 async def tester_node(state: AgentState) -> dict:
@@ -32,13 +33,8 @@ Return ONLY a valid JSON object with EXACTLY this key:
     response = await llm.ainvoke([sys_prompt, user_prompt])
     content = response.content
     
-    if content.startswith("```json"):
-        content = content.replace("```json", "", 1)
-    if content.endswith("```"):
-        content = content[:-3]
-        
     try:
-        data = json.loads(content.strip())
+        data = extract_json_from_text(content)
         pytest_code = data.get("pytest_code", "")
     except Exception as e:
         pytest_code = f"# Error generating tests: {str(e)}"

@@ -2,6 +2,7 @@ import json
 from pydantic import BaseModel, Field
 from agents.state import AgentState
 from agents.llm import llm
+from agents.utils import extract_json_from_text
 from langchain_core.messages import SystemMessage, HumanMessage
 
 async def core_node(state: AgentState) -> dict:
@@ -33,19 +34,13 @@ Return ONLY a valid JSON object with EXACTLY these three keys:
     response = await llm.ainvoke([sys_prompt] + messages)
     content = response.content
     
-    # Clean markdown if present
-    if content.startswith("```json"):
-        content = content.replace("```json", "", 1)
-    if content.endswith("```"):
-        content = content[:-3]
-        
     try:
-        data = json.loads(content.strip())
+        data = extract_json_from_text(content)
         is_tool_needed = data.get("is_tool_needed", False)
         missing_cap = data.get("missing_capability_description", "")
         reply = data.get("response_to_user", "Processing request...")
     except Exception as e:
-        # Fallback if json fails
+        # Fallback if json extraction fails
         is_tool_needed = False
         missing_cap = ""
         reply = f"Error parsing reasoning: {str(e)}"
