@@ -1,46 +1,75 @@
-version: '3.8'
-
 services:
-  # ============================================================
-  # OmniRoute - LLM Gateway (Free Multi-Model Router)
-  # NOTE: OmniRoute is already running on the other laptop
-  #       at 192.168.1.3:20128. This service is here as a
-  #       reference in case you want to run it locally instead.
-  # ============================================================
-  # omniroute:
-  #   image: diegosouzapw/omniroute:latest
-  #   container_name: omniroute
-  #   restart: unless-stopped
-  #   ports:
-  #     - "20128:20128"
-  #   volumes:
-  #     - omniroute_data:/app/data
-  #   environment:
-  #     - PORT=20128
-  #     - NODE_ENV=production
-  #   stop_grace_period: 40s
-
-  # ============================================================
-  # Python Sandbox - Isolated environment for testing forged tools
-  # ============================================================
-  sandbox:
-    image: python:3.11-slim
-    container_name: self-forge-sandbox
-    command: ["tail", "-f", "/dev/null"]  # Keep alive for on-demand execution
+  # ─── PostgreSQL 16 ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: sfa_postgres
     restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sfa_db}
+      POSTGRES_USER: ${POSTGRES_USER:-sfa_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - sandbox_workspace:/workspace
-    working_dir: /workspace
-    mem_limit: 512m
-    cpus: 1.0
-    # Network enabled so tools can install pip packages and access APIs
-    networks:
-      - sandbox_net
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sfa_user} -d ${POSTGRES_DB:-sfa_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
-networks:
-  sandbox_net:
-    driver: bridge
+  # ─── MinIO Object Storage (Chainguard Distribution) ──────────────────────────
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: sfa_minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin123}
+    command: server /data --console-address ":9001"
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ─── MinIO Bucket Initializer (runs once then exits) ─────────────────────────
+  minio-init:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: sfa_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 $${MINIO_ACCESS_KEY:-minioadmin} $${MINIO_SECRET_KEY:-minioadmin123};
+        mc mb --ignore-existing local/$${MINIO_BUCKET_TOOLS:-tool-archives};
+        mc mb --ignore-existing local/$${MINIO_BUCKET_DOCS:-user-documents};
+        echo 'MinIO buckets ready.';
+        exit 0;
+      "
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
+      MINIO_BUCKET_TOOLS: ${MINIO_BUCKET_TOOLS:-tool-archives}
+      MINIO_BUCKET_DOCS: ${MINIO_BUCKET_DOCS:-user-documents}
+
+  # ─── Pre-cached Python Test Sandbox ───────────────────────────────────────────
+  sandbox:
+    build:
+      context: ./backend/sandbox
+      dockerfile: Dockerfile.sandbox
+    image: sfa-sandbox:latest
+    container_name: sfa_sandbox_builder
+    command: ["echo", "Sandbox image built successfully."]
 
 volumes:
-  # omniroute_data:
-  sandbox_workspace:
+  postgres_data:
+  minio_data:

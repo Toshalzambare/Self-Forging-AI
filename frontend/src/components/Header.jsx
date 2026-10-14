@@ -96,13 +96,25 @@ const Header = ({ onOpenModelModal, onOpenSettingsModal, onToggleLogsDrawer, sel
                 <Link
                   to="/api-settings"
                   className="flex items-center space-x-2 py-1 px-1.5 sm:px-2.5 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/25 transition-colors no-underline"
+                  title={`${user?.username || 'User'} (${user?.email || ''})`}
                 >
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary-container/30 border border-primary/40 flex items-center justify-center text-primary text-[10px] sm:text-xs font-semibold flex-shrink-0 uppercase">
-                    {user?.username?.slice(0, 2) || 'U'}
-                  </div>
+                  {user?.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={user.username}
+                      className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover border border-primary/40 flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary-container/30 border border-primary/40 flex items-center justify-center text-primary text-[10px] sm:text-xs font-semibold flex-shrink-0 uppercase">
+                      {user?.username?.slice(0, 2) || 'U'}
+                    </div>
+                  )}
                   <div className="hidden xl:flex flex-col text-left">
-                    <span className="text-xs font-medium text-on-surface leading-tight">{user?.username || 'User'}</span>
-                    <span className="text-[10px] text-emerald-400 leading-tight font-medium">Online</span>
+                    <span className="text-xs font-medium text-on-surface leading-tight truncate max-w-[100px]">{user?.username || 'User'}</span>
+                    <span className="text-[10px] text-slate-400 leading-tight flex items-center space-x-1">
+                      <span className={`w-1.5 h-1.5 rounded-full ${user?.auth_provider === 'google' ? 'bg-indigo-400' : 'bg-emerald-400'}`}></span>
+                      <span className="capitalize">{user?.auth_provider || 'local'}</span>
+                    </span>
                   </div>
                 </Link>
                 <button

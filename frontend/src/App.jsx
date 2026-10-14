@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 import { APP_NAME, DEFAULT_MODEL } from './config.js';
+import { getStoredUser, authLogout } from './utils/api.js';
 import Toast from './components/Toast.jsx';
 import Header from './components/Header.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -13,18 +14,9 @@ import CodeModal from './components/CodeModal.jsx';
 import ModelModal from './components/ModelModal.jsx';
 import ActivityDrawer from './components/ActivityDrawer.jsx';
 
-const SESSION_KEY = 'sfa_user';
-
 const App = () => {
-  // Auth state — persisted to sessionStorage so refreshes don't log you out
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem(SESSION_KEY);
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  // Auth state — managed via central api.js client (localStorage)
+  const [user, setUser] = useState(() => getStoredUser());
 
   const [modelModalOpen, setModelModalOpen] = useState(false);
   const [logsDrawerOpen, setLogsDrawerOpen] = useState(false);
@@ -39,21 +31,28 @@ const App = () => {
 
   const handleLogin = (userData) => {
     setUser(userData);
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(userData));
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await authLogout();
     setUser(null);
-    sessionStorage.removeItem(SESSION_KEY);
   };
 
   const handleInspectCode = (toolName) => {
     setCodeModalData({ isOpen: true, toolName });
   };
 
-  // Set document title from env
+  // Set document title from env & listen for session expiration
   useEffect(() => {
     document.title = APP_NAME;
+
+    const onAuthExpired = () => {
+      setUser(null);
+      showToast('Session Expired', 'Your session has expired. Please sign in again.');
+    };
+
+    window.addEventListener('sfa-auth-expired', onAuthExpired);
+    return () => window.removeEventListener('sfa-auth-expired', onAuthExpired);
   }, []);
 
   // Not logged in → show login page for all routes

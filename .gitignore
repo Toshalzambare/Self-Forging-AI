@@ -47,6 +47,11 @@ dist/
 docker-compose.override.yml
 
 # Database
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
 data/*.db
 data/*.db-wal
 data/*.db-shm
@@ -55,7 +60,7 @@ data/*.db-shm
 logs/
 *.log
 
-# Testing
+# Testing & Coverage
 .coverage
 htmlcov/
 .pytest_cache/
@@ -65,6 +70,9 @@ htmlcov/
 sandbox/temp/
 sandbox/artifacts/
 
-# Generated tools cache
+# Generated tools cache & Scratch scripts
 .tool_cache/
-tests/
+scratch/
+
+.agents/
+.planning/

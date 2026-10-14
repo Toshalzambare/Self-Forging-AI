@@ -1,0 +1,21 @@
+# Self-Forging AI Agent — Pre-cached Python Test Sandbox
+# All test dependencies baked in to eliminate per-run pip install overhead
+
+FROM python:3.11-slim
+
+# Install test runtime dependencies once
+RUN pip install --no-cache-dir \
+    pytest==8.3.3 \
+    pytest-asyncio==0.24.0 \
+    pydantic>=2.0 \
+    requests>=2.32 \
+    urllib3>=2.0 \
+    httpx>=0.27
+
+# Create writable cache directories to prevent pytest PermissionDenied
+RUN mkdir -p /tmp/.pytest_cache && chmod 777 /tmp/.pytest_cache
+
+WORKDIR /app
+
+# Default: run pytest with no pip install — callers override CMD
+CMD ["pytest", "test_tool.py", "-v", "--tb=short", "-o", "cache_dir=/tmp/.pytest_cache"]

@@ -23,12 +23,33 @@ class Config:
     OMNIROUTE_MODEL: str = os.getenv("OMNIROUTE_MODEL", "auto")
 
     # Docker Sandbox
-    DOCKER_SANDBOX_IMAGE: str = os.getenv("DOCKER_SANDBOX_IMAGE", "python:3.11-slim")
+    DOCKER_SANDBOX_IMAGE: str = os.getenv("DOCKER_SANDBOX_IMAGE", "sfa-sandbox:latest")
     DOCKER_SANDBOX_TIMEOUT: int = int(os.getenv("DOCKER_SANDBOX_TIMEOUT", "60"))
     DOCKER_SANDBOX_MEMORY_LIMIT: str = os.getenv("DOCKER_SANDBOX_MEMORY_LIMIT", "512m")
     DOCKER_SANDBOX_NETWORK: str = os.getenv("DOCKER_SANDBOX_NETWORK", "bridge")
 
-    # Tool Registry Database
+    # PostgreSQL 16
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "sfa_db")
+    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "sfa_user")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "changeme")
+    POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
+    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
+    POSTGRES_URL: str = os.getenv(
+        "POSTGRES_URL",
+        "postgresql+asyncpg://sfa_user:changeme@localhost:5432/sfa_db"
+    )
+
+    # MinIO S3 Object Storage
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+    MINIO_ACCESS_KEY: str = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+    MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
+    MINIO_BUCKET_TOOLS: str = os.getenv("MINIO_BUCKET_TOOLS", "tool-archives")
+    MINIO_BUCKET_DOCS: str = os.getenv("MINIO_BUCKET_DOCS", "user-documents")
+    MINIO_USE_SSL: bool = os.getenv("MINIO_USE_SSL", "false").lower() == "true"
+    MINIO_PORT: int = int(os.getenv("MINIO_PORT", "9000"))
+    MINIO_CONSOLE_PORT: int = int(os.getenv("MINIO_CONSOLE_PORT", "9001"))
+
+    # Legacy Tool Registry Database (SQLite - deprecated)
     REGISTRY_DB_PATH: str = os.getenv("REGISTRY_DB_PATH", "./data/registry.db")
 
     # FastAPI Backend
@@ -45,6 +66,20 @@ class Config:
     MAX_REPAIR_RETRIES: int = int(os.getenv("MAX_REPAIR_RETRIES", "3"))
     MAX_ADVERSARIAL_TESTS: int = int(os.getenv("MAX_ADVERSARIAL_TESTS", "5"))
 
+    # LLM Request Timeout
+    LLM_REQUEST_TIMEOUT: int = int(os.getenv("LLM_REQUEST_TIMEOUT", "60"))
+    LLM_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "2"))
+
+    # JWT & Session Security
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "sfa_jwt_dev_secret_change_in_production_key_128bit")
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+
+    # Google OAuth 2.0
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+
     @classmethod
     def validate(cls) -> list[str]:
         """Check for missing critical configuration. Returns list of warnings."""
@@ -53,6 +88,8 @@ class Config:
             warnings.append("OMNIROUTE_API_KEY is not set. LLM calls will fail.")
         if not cls.OMNIROUTE_BASE_URL:
             warnings.append("OMNIROUTE_BASE_URL is not set.")
+        if not cls.POSTGRES_URL or "changeme" in cls.POSTGRES_URL:
+            warnings.append("POSTGRES_URL uses default credentials - update before production use.")
         return warnings
 
 
