@@ -50,7 +50,7 @@ const ConversationSidebar = ({
   const [searchQuery, setSearchQuery] = useState('');
 
   const filtered = conversations.filter((c) =>
-    c.title.toLowerCase().includes(searchQuery.toLowerCase())
+    (c.title || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const pinned = filtered.filter((c) => c.is_pinned);

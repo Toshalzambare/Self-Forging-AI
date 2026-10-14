@@ -178,6 +178,13 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
     try:
         final_state = await graph.ainvoke(initial_state)
     except Exception as e:
+        async with get_db() as db:
+            await ConversationService.add_message(
+                db,
+                conversation_id=conversation_id,
+                role="assistant",
+                content=f"An error occurred while executing the task: {str(e)}",
+            )
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
 
     messages = final_state.get("messages", [])
@@ -380,7 +387,7 @@ async def update_provider(
         # If this is a global provider (user_id is None), do not mutate shared row.
         # Instead, create or update a user-scoped override row.
         if provider.user_id is None:
-            user_override_id = f"{provider.id}_{user_id_str[:8]}"
+            user_override_id = f"{provider.id}_{user_id_str}"
             user_override = await RegistryRepository.get_provider(db, provider_id=user_override_id, user_id=user_id_str)
             if not user_override:
                 user_override = Provider(

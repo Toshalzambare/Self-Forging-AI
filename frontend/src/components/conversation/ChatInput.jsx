@@ -12,7 +12,7 @@ const ChatInput = ({ value, onChange, onSend, isLoading, placeholder }) => {
   }, [value]);
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent?.isComposing) {
       e.preventDefault();
       onSend();
     }

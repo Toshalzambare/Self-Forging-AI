@@ -36,15 +36,20 @@ const ApiSettingsPage = ({ showToast, user }) => {
           method: 'PATCH',
           body: JSON.stringify({ api_key: key.trim() }),
         });
+        setApiKeys((prev) => {
+          const next = { ...prev };
+          delete next[providerId];
+          return next;
+        });
       }
       showToast?.('Credentials Saved', 'API credentials updated and persisted.');
-      // Refresh providers
-      const data = await apiFetch('/api/settings/providers');
-      setProviders(data.providers || []);
-      setApiKeys({});
     } catch (err) {
       showToast?.('Save Failed', err.message || 'Failed to save settings.');
     } finally {
+      try {
+        const data = await apiFetch('/api/settings/providers');
+        setProviders(data.providers || []);
+      } catch (_) {}
       setIsSaving(false);
     }
   };

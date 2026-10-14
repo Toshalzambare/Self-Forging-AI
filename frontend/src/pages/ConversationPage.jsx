@@ -136,7 +136,7 @@ const ConversationPage = ({
                 <span className="text-xs">Loading conversation history...</span>
               </div>
             ) : messages.length === 0 ? (
-              <EmptyChatStarters onSelectPrompt={(p) => sendMessage(p)} />
+              <EmptyChatStarters onSelectPrompt={(p) => !isSending && sendMessage(p)} />
             ) : (
               <>
                 {messages.map((m, idx) => {
@@ -148,7 +148,7 @@ const ConversationPage = ({
                     <ChatMessage
                       key={m.id}
                       message={m}
-                      onRetry={prevUser ? () => sendMessage(prevUser.content) : undefined}
+                      onRetry={prevUser && !isSending ? () => sendMessage(prevUser.content) : undefined}
                     />
                   );
                 })}
