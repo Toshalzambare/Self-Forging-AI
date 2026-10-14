@@ -16,6 +16,7 @@ from agents.graph import build_graph
 from registry import get_db, check_db_connection, RegistryRepository, User
 from auth import auth_router, get_current_user
 from storage import check_storage_connection
+from conversation import conversation_router, ConversationService
 
 app = FastAPI(
     title=config.APP_NAME,
@@ -31,8 +32,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount Authentication router
+# Mount Authentication & Conversation routers
 app.include_router(auth_router)
+app.include_router(conversation_router)
 
 # Build the LangGraph once at startup
 graph = None
@@ -81,10 +83,12 @@ async def startup():
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
     session_id: str
+    conversation_id: str
     reply: str
     forged_tool: Optional[dict] = None
     sandbox_results: Optional[str] = None
@@ -140,6 +144,24 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
         raise HTTPException(status_code=503, detail="Agent not ready yet.")
 
     session_id = req.session_id or str(uuid.uuid4())
+
+    # Get or create persistent conversation
+    async with get_db() as db:
+        conv = await ConversationService.get_or_create_conversation(
+            db,
+            user_id=str(current_user.id),
+            conversation_id=req.conversation_id,
+            initial_prompt=req.message,
+        )
+        conversation_id = str(conv.id)
+
+        # 1. Persist User Message to PostgreSQL
+        await ConversationService.add_message(
+            db,
+            conversation_id=conversation_id,
+            role="user",
+            content=req.message,
+        )
 
     initial_state = {
         "messages": [HumanMessage(content=req.message)],
@@ -223,8 +245,26 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
                 details="Agent provided a conversational response."
             )
 
+    # 2. Persist Assistant Reply to PostgreSQL
+    forge_meta = {
+        "is_tool_forged": is_tool_forged,
+        "forged_tool": forged_tool,
+        "sandbox_results": final_state.get("sandbox_results"),
+        "tests_passed": final_state.get("tests_passed"),
+        "repair_attempts": final_state.get("repair_attempts"),
+    }
+    async with get_db() as db:
+        await ConversationService.add_message(
+            db,
+            conversation_id=conversation_id,
+            role="assistant",
+            content=reply,
+            forge_data=forge_meta if is_tool_forged else None,
+        )
+
     return ChatResponse(
         session_id=session_id,
+        conversation_id=conversation_id,
         reply=reply,
         forged_tool=forged_tool,
         sandbox_results=final_state.get("sandbox_results"),
@@ -256,6 +296,28 @@ async def list_tools(current_user: User = Depends(get_current_user)):
             for t in tools
         ]
         return {"tools": tool_list, "count": len(tool_list)}
+
+
+@app.post("/api/tools/{tool_id}/test")
+async def test_tool(tool_id: str, current_user: User = Depends(get_current_user)):
+    """Test and verify a registered tool's syntax and AST execution readiness."""
+    import ast
+    async with get_db() as db:
+        tool = await RegistryRepository.get_tool(db, tool_id=tool_id)
+        if not tool or (tool.user_id and str(tool.user_id) != str(current_user.id)):
+            raise HTTPException(status_code=404, detail="Tool not found or access denied")
+        try:
+            ast.parse(tool.code or "")
+            return {
+                "status": "passed",
+                "message": f"Syntax and AST validation verified for {tool.name}. Function ready for sandbox execution.",
+            }
+        except SyntaxError as exc:
+            return {
+                "status": "failed",
+                "message": f"Tool syntax validation error: {str(exc)}",
+            }
+
 
 
 @app.get("/api/logs")
@@ -295,6 +357,31 @@ async def list_providers(current_user: User = Depends(get_current_user)):
             for p in providers
         ]
         return {"providers": provider_list}
+
+
+class ProviderUpdate(BaseModel):
+    api_key: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@app.patch("/api/settings/providers/{provider_id}")
+async def update_provider(
+    provider_id: str,
+    req: ProviderUpdate,
+    current_user: User = Depends(get_current_user),
+):
+    """Update or save API key / active status for a model provider."""
+    async with get_db() as db:
+        provider = await RegistryRepository.get_provider(db, provider_id=provider_id, user_id=str(current_user.id))
+        if not provider:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        if req.api_key is not None:
+            provider.api_key = req.api_key
+        if req.is_active is not None:
+            provider.is_active = req.is_active
+        await db.commit()
+        return {"status": "success", "message": f"Settings updated for {provider.name}"}
+
 
 
 @app.get("/api/mcp-servers")

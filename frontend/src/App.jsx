@@ -20,7 +20,7 @@ const App = () => {
 
   const [modelModalOpen, setModelModalOpen] = useState(false);
   const [logsDrawerOpen, setLogsDrawerOpen] = useState(false);
-  const [codeModalData, setCodeModalData] = useState({ isOpen: false, toolName: '' });
+  const [codeModalData, setCodeModalData] = useState({ isOpen: false, toolName: '', code: '' });
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [toast, setToast] = useState({ visible: false, title: '', message: '' });
 
@@ -38,8 +38,8 @@ const App = () => {
     setUser(null);
   };
 
-  const handleInspectCode = (toolName) => {
-    setCodeModalData({ isOpen: true, toolName });
+  const handleInspectCode = (toolName, code) => {
+    setCodeModalData({ isOpen: true, toolName, code });
   };
 
   // Set document title from env & listen for session expiration
@@ -122,7 +122,8 @@ const App = () => {
       <CodeModal
         isOpen={codeModalData.isOpen}
         toolName={codeModalData.toolName}
-        onClose={() => setCodeModalData(prev => ({ ...prev, isOpen: false }))}
+        code={codeModalData.code}
+        onClose={() => setCodeModalData(prev => ({ ...prev, isOpen: false, code: '' }))}
         showToast={showToast}
       />
 

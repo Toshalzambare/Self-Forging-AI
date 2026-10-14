@@ -6,8 +6,9 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy import select, or_, update
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from registry.models import User, UserSession, Tool, ActivityLog, Provider, McpServer
+from registry.models import User, UserSession, Tool, ActivityLog, Provider, McpServer, Conversation, Message
 
 
 def _hash_refresh_token(token: str) -> str:
@@ -261,6 +262,14 @@ class RegistryRepository:
         result = await db.execute(stmt)
         return list(result.scalars().all())
 
+    @staticmethod
+    async def get_provider(db: AsyncSession, provider_id: str, user_id: str | None = None) -> Optional[Provider]:
+        stmt = select(Provider).where(Provider.id == provider_id)
+        if user_id:
+            stmt = stmt.where(or_(Provider.user_id == user_id, Provider.user_id.is_(None)))
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
     # ── MCP Servers ────────────────────────────────────────────────────────────
 
     @staticmethod
@@ -299,3 +308,119 @@ class RegistryRepository:
                 db.add(m)
 
         await db.commit()
+
+    # ── Conversations & Messages ───────────────────────────────────────────────
+
+    @staticmethod
+    async def create_conversation(
+        db: AsyncSession,
+        user_id: str,
+        title: str = "New Conversation",
+    ) -> Conversation:
+        conv = Conversation(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            title=title.strip() if title else "New Conversation",
+            is_pinned=False,
+        )
+        db.add(conv)
+        await db.commit()
+        await db.refresh(conv)
+        return conv
+
+    @staticmethod
+    async def get_conversation(
+        db: AsyncSession,
+        conversation_id: str,
+        user_id: str,
+    ) -> Optional[Conversation]:
+        stmt = (
+            select(Conversation)
+            .where(Conversation.id == conversation_id, Conversation.user_id == user_id)
+            .options(selectinload(Conversation.messages))
+        )
+        res = await db.execute(stmt)
+        return res.scalar_one_or_none()
+
+    @staticmethod
+    async def list_conversations(
+        db: AsyncSession,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Conversation]:
+        stmt = (
+            select(Conversation)
+            .where(Conversation.user_id == user_id)
+            .order_by(Conversation.is_pinned.desc(), Conversation.updated_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        res = await db.execute(stmt)
+        return list(res.scalars().all())
+
+    @staticmethod
+    async def update_conversation(
+        db: AsyncSession,
+        conversation_id: str,
+        user_id: str,
+        title: Optional[str] = None,
+        is_pinned: Optional[bool] = None,
+    ) -> Optional[Conversation]:
+        conv = await RegistryRepository.get_conversation(db, conversation_id, user_id)
+        if not conv:
+            return None
+        if title is not None:
+            conv.title = title.strip()
+        if is_pinned is not None:
+            conv.is_pinned = is_pinned
+        await db.commit()
+        await db.refresh(conv)
+        return conv
+
+    @staticmethod
+    async def delete_conversation(
+        db: AsyncSession,
+        conversation_id: str,
+        user_id: str,
+    ) -> bool:
+        conv = await RegistryRepository.get_conversation(db, conversation_id, user_id)
+        if not conv:
+            return False
+        await db.delete(conv)
+        await db.commit()
+        return True
+
+    @staticmethod
+    async def add_message(
+        db: AsyncSession,
+        conversation_id: str,
+        role: str,
+        content: str,
+        forge_data: Optional[dict] = None,
+    ) -> Message:
+        msg = Message(
+            id=str(uuid.uuid4()),
+            conversation_id=conversation_id,
+            role=role,
+            content=content,
+            forge_data=forge_data,
+        )
+        db.add(msg)
+        await db.commit()
+        await db.refresh(msg)
+        return msg
+
+    @staticmethod
+    async def list_messages(
+        db: AsyncSession,
+        conversation_id: str,
+    ) -> list[Message]:
+        stmt = (
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.asc())
+        )
+        res = await db.execute(stmt)
+        return list(res.scalars().all())
+

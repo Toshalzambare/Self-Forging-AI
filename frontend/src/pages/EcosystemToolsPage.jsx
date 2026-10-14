@@ -37,12 +37,19 @@ const EcosystemToolsPage = ({ onInspectCode, showToast, user }) => {
     fetchTools();
   }, []);
 
-  const handleTest = (toolId) => {
+  const handleTest = async (toolId) => {
     setTestingTool(toolId);
-    setTimeout(() => {
+    try {
+      const res = await apiFetch(`/api/tools/${toolId}/test`, { method: 'POST' });
+      showToast(
+        res.status === 'passed' ? 'Verification Passed' : 'Verification Issue',
+        res.message || `Tested tool ${toolId}`
+      );
+    } catch (err) {
+      showToast('Test Failed', err.message);
+    } finally {
       setTestingTool(null);
-      showToast('Health Check Passed', `Tool ${toolId} responded with 200 OK via local socket.`);
-    }, 800);
+    }
   };
 
   const filteredTools = allTools.filter(t => {
@@ -114,9 +121,22 @@ const EcosystemToolsPage = ({ onInspectCode, showToast, user }) => {
         </div>
 
         {loading ? (
-          <div className="text-center py-10 font-mono text-on-surface-variant">Loading tools...</div>
+          <div className="text-center py-16 font-mono text-on-surface-variant flex flex-col items-center justify-center space-y-2">
+            <span className="material-symbols-outlined text-[28px] animate-spin text-primary">sync</span>
+            <span>Loading tools registry...</span>
+          </div>
         ) : error ? (
           <div className="text-center py-10 font-mono text-error">Error: {error}</div>
+        ) : filteredTools.length === 0 ? (
+          <div className="text-center py-16 px-4 rounded-2xl bg-surface-container-low border border-outline-variant/20 flex flex-col items-center justify-center space-y-3">
+            <div className="w-12 h-12 rounded-xl bg-primary-container/20 text-primary flex items-center justify-center">
+              <span className="material-symbols-outlined text-[28px]">extension_off</span>
+            </div>
+            <h3 className="font-semibold text-on-surface text-base">No Synthesized Tools Found</h3>
+            <p className="text-xs text-on-surface-variant max-w-md">
+              Ask the agent to perform a novel capability in the Conversation tab. It will autonomously synthesize, verify in Docker, and register the tool here.
+            </p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
             {filteredTools.map(tool => (
@@ -152,7 +172,7 @@ const EcosystemToolsPage = ({ onInspectCode, showToast, user }) => {
                 <div className="mt-6 pt-4 space-y-2">
                   <div className="flex flex-col xl:flex-row gap-2">
                     <button
-                      onClick={() => onInspectCode(tool.codeId)}
+                      onClick={() => onInspectCode(tool.name, tool.code)}
                       className="flex-1 py-2 px-3 rounded-xl bg-surface-container-low hover:bg-surface-bright text-on-surface font-body-sm text-xs font-medium text-center transition-colors shadow-sm whitespace-nowrap"
                     >
                       Inspect Code
