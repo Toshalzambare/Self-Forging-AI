@@ -1,3 +1,4 @@
+import asyncio
 from langgraph.graph import StateGraph, END
 from agents.state import AgentState
 
@@ -10,22 +11,64 @@ from agents.nodes.register import register_node
 
 from sandbox.profiler import check_security
 from sandbox.executor import execute_in_sandbox
+from observability import emit_agent_event, AgentLifecycleEvent
 
 async def verify_node(state: AgentState) -> dict:
     """Runs the tests against the generated code in a Docker Sandbox."""
     code = state.get("generated_code", "")
     tests = state.get("adversarial_tests", "")
+    user_id = state.get("user_id", "")
+    session_id = state.get("session_id", "")
     
     # 1. Admission Gate: Semantic Profiling
     violations = check_security(code)
     if violations:
+        if user_id:
+            await emit_agent_event(
+                user_id=user_id,
+                session_id=session_id,
+                event=AgentLifecycleEvent.TOOL_FAILED,
+                status="security_violation",
+                summary="Code rejected by Admission Gate semantic profiler.",
+                data={"violations": violations, "code_preview": code[:200]},
+            )
         return {
             "tests_passed": False,
             "sandbox_results": f"SECURITY VIOLATION - Code rejected by Admission Gate:\n" + "\n".join(violations)
         }
         
     # 2. Execution Sandbox
-    passed, logs = execute_in_sandbox(code, tests)
+    if user_id:
+        await emit_agent_event(
+            user_id=user_id,
+            session_id=session_id,
+            event=AgentLifecycleEvent.SANDBOX_TESTING,
+            status="in_progress",
+            summary=f"Running pytest test suite in Docker sandbox (attempt {state.get('repair_attempts', 0) + 1})...",
+            data={"attempt": state.get("repair_attempts", 0) + 1},
+        )
+
+    passed, logs = await asyncio.to_thread(execute_in_sandbox, code, tests)
+
+    if user_id:
+        if passed:
+            await emit_agent_event(
+                user_id=user_id,
+                session_id=session_id,
+                event=AgentLifecycleEvent.TOOL_VERIFIED,
+                status="success",
+                summary="Sandbox test verification passed successfully.",
+                data={"logs": logs},
+            )
+        else:
+            await emit_agent_event(
+                user_id=user_id,
+                session_id=session_id,
+                event=AgentLifecycleEvent.TOOL_FAILED,
+                status="failed",
+                summary=f"Sandbox test verification failed (attempt {state.get('repair_attempts', 0) + 1}).",
+                data={"logs": logs},
+            )
     
     return {
         "tests_passed": passed,

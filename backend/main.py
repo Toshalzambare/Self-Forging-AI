@@ -7,7 +7,7 @@ import asyncio
 import logging
 import re
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -18,8 +18,10 @@ from agents.graph import build_graph
 from registry import get_db, check_db_connection, RegistryRepository, User, dynamic_mcp_registry
 from registry.sfatool import export_sfatool_payload, validate_sfatool_payload, verify_import_security
 from auth import auth_router, get_current_user
+from auth.security import decode_access_token
 from storage import check_storage_connection
 from conversation import conversation_router, ConversationService
+from observability import connection_manager, emit_agent_event, AgentLifecycleEvent
 
 app = FastAPI(
     title=config.APP_NAME,
@@ -188,6 +190,7 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
         "repair_attempts": 0,
         "documentation_context": "",
         "user_id": str(current_user.id),
+        "session_id": conversation_id,
         "is_registered": False,
         "registered_tool_id": "",
     }
@@ -246,7 +249,7 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
                 await RegistryRepository.add_log(
                     db,
                     user_id=str(current_user.id),
-                    session_id=session_id,
+                    session_id=conversation_id,
                     action="Tool Registered",
                     details=f"Tool '{name}' successfully verified and added to registry."
                 )
@@ -255,7 +258,7 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
                 await RegistryRepository.add_log(
                     db,
                     user_id=str(current_user.id),
-                    session_id=session_id,
+                    session_id=conversation_id,
                     action="Tool Verification Failed",
                     details=f"Tool generation failed verification after {final_state.get('repair_attempts')} attempts.",
                     status="error"
@@ -265,7 +268,7 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
             await RegistryRepository.add_log(
                 db,
                 user_id=str(current_user.id),
-                session_id=session_id,
+                session_id=conversation_id,
                 action="Chat Response",
                 details="Agent provided a conversational response."
             )
@@ -519,10 +522,23 @@ async def test_tool(tool_id: str, current_user: User = Depends(get_current_user)
 
 
 @app.get("/api/logs")
-async def list_logs(current_user: User = Depends(get_current_user)):
-    """List activity logs for the authenticated user."""
+async def list_logs(
+    session_id: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+):
+    """List activity logs for the authenticated user with optional session and status filtering."""
     async with get_db() as db:
-        logs = await RegistryRepository.list_logs(db, user_id=str(current_user.id))
+        logs = await RegistryRepository.list_logs(
+            db,
+            user_id=str(current_user.id),
+            session_id=session_id,
+            status=status,
+            limit=limit,
+            offset=offset,
+        )
         log_list = [
             {
                 "id": l.id,
@@ -535,6 +551,46 @@ async def list_logs(current_user: User = Depends(get_current_user)):
             for l in logs
         ]
         return {"logs": log_list}
+
+
+@app.websocket("/ws/logs/{user_id}")
+async def websocket_logs(
+    websocket: WebSocket,
+    user_id: str,
+    token: Optional[str] = Query(None),
+):
+    """
+    WebSocket endpoint streaming agent lifecycle events in real time.
+    Requires a valid JWT access token matching user_id.
+    """
+    if not token:
+        await websocket.accept()
+        await websocket.close(code=4003, reason="Missing authentication token")
+        return
+
+    payload = decode_access_token(token)
+    if not payload or str(payload.get("sub")) != str(user_id):
+        await websocket.accept()
+        await websocket.close(code=4003, reason="Unauthorized or invalid token")
+        return
+
+    await connection_manager.connect(user_id, websocket)
+    try:
+        await websocket.send_json({
+            "type": "CONNECTION_ESTABLISHED",
+            "user_id": user_id,
+            "message": "Connected to real-time agent observability stream.",
+        })
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        logger.warning("WebSocket error for user '%s': %s", user_id, str(exc))
+    finally:
+        connection_manager.disconnect(user_id, websocket)
 
 
 @app.get("/api/providers")

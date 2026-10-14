@@ -1,159 +1,207 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiFetch, APP_NAME } from '../config.js';
+import LogFilterBar from '../components/logs/LogFilterBar.jsx';
+import LogTraceModal from '../components/logs/LogTraceModal.jsx';
 
 const ActivityLogsPage = ({ showToast }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialSession = searchParams.get('session_id') || '';
+
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('all'); // 'all' | 'success' | 'error'
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sessionIdFilter, setSessionIdFilter] = useState(initialSession);
+  const [inspectingLog, setInspectingLog] = useState(null);
+
+  // Sync session filter with URL params
+  useEffect(() => {
+    const urlSession = searchParams.get('session_id') || '';
+    setSessionIdFilter(urlSession);
+  }, [searchParams]);
+
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (sessionIdFilter) params.set('session_id', sessionIdFilter);
+      if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
+      params.set('limit', '100');
+
+      const data = await apiFetch(`/api/logs?${params.toString()}`);
+      setLogs(data.logs || []);
+    } catch (err) {
+      showToast?.('Error Fetching Logs', err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionIdFilter, statusFilter, showToast]);
 
   useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        const data = await apiFetch('/api/logs');
-        setLogs(data.logs || []);
-      } catch (err) {
-        showToast?.('Error', err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchLogs();
-  }, [showToast]);
+  }, [fetchLogs]);
 
-  const filteredLogs = logs.filter((log) => {
-    const isError = log.status === 'error' || log.status === 'failed';
-    if (filterStatus === 'success') return !isError;
-    if (filterStatus === 'error') return isError;
-    return true;
-  });
+  const handleSessionChange = (newSession) => {
+    setSessionIdFilter(newSession);
+    if (newSession) {
+      setSearchParams({ session_id: newSession });
+    } else {
+      setSearchParams({});
+    }
+  };
 
-  const successCount = logs.filter((l) => l.status !== 'error' && l.status !== 'failed').length;
-  const errorCount = logs.filter((l) => l.status === 'error' || l.status === 'failed').length;
+  const handleClearSession = () => {
+    setSessionIdFilter('');
+    setSearchParams({});
+  };
+
+  const counts = useMemo(() => {
+    const res = { all: logs.length, success: 0, failed: 0, security_violation: 0, in_progress: 0 };
+    logs.forEach((l) => {
+      const s = (l.status || '').toLowerCase();
+      if (s === 'success' || s === 'passed') res.success += 1;
+      else if (s === 'failed' || s === 'error') res.failed += 1;
+      else if (s === 'security_violation') res.security_violation += 1;
+      else if (s === 'in_progress') res.in_progress += 1;
+    });
+    return res;
+  }, [logs]);
 
   return (
     <main className="pt-20 min-h-screen bg-surface px-4 sm:px-6 py-6 max-w-7xl mx-auto w-full pb-16">
-      {/* Header */}
+      {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between pb-6 gap-4 border-b border-outline-variant/20 mb-6">
         <div>
           <div className="flex items-center space-x-2 pb-1">
             <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
             <span className="font-label-sm text-label-sm uppercase tracking-wider text-primary">
-              Autonomous Audit Trail
+              Observability &amp; Audit Trail
             </span>
             <span className="text-on-surface-variant/40 font-mono text-body-sm">•</span>
-            <span className="font-mono text-body-sm text-on-surface-variant">Host: {APP_NAME}-core</span>
+            <span className="font-mono text-body-sm text-on-surface-variant">System: {APP_NAME}-core</span>
           </div>
-          <h1 className="font-headline-lg text-headline-lg font-semibold text-on-surface tracking-tight">
-            Activity &amp; Execution Logs
+          <h1 className="font-headline-lg text-2xl font-semibold text-on-surface tracking-tight">
+            Activity &amp; Execution Audit Logs
           </h1>
-          <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl mt-1">
-            Inspect {APP_NAME}'s thought chains, verified sandbox code, and external tool calls in plain, transparent terms.
+          <p className="font-body-md text-xs sm:text-sm text-on-surface-variant max-w-2xl mt-1">
+            Real-time chronological trace of every autonomous reasoning step, tool forging pipeline, sandbox test run, and admission gate decision.
           </p>
         </div>
 
-        {/* Status Filter Pills */}
-        <div className="flex items-center space-x-2 overflow-x-auto pb-1">
-          {[
-            { id: 'all', label: `All (${logs.length})` },
-            { id: 'success', label: `Success (${successCount})` },
-            { id: 'error', label: `Error / Failed (${errorCount})` },
-          ].map((pill) => (
-            <button
-              key={pill.id}
-              type="button"
-              onClick={() => setFilterStatus(pill.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition shadow-sm whitespace-nowrap ${
-                filterStatus === pill.id
-                  ? 'bg-primary text-on-primary'
-                  : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              {pill.label}
-            </button>
-          ))}
-        </div>
+        <button
+          type="button"
+          onClick={fetchLogs}
+          className="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/20 text-xs font-semibold text-on-surface flex items-center space-x-1.5 transition self-start md:self-end shadow-sm"
+        >
+          <span className="material-symbols-outlined text-[16px]">refresh</span>
+          <span>Refresh Audit Logs</span>
+        </button>
       </div>
 
+      {/* Filter Bar */}
+      <LogFilterBar
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        sessionId={sessionIdFilter}
+        onSessionChange={handleSessionChange}
+        onClearSession={handleClearSession}
+        counts={counts}
+      />
+
       {/* Logs Stream */}
-      <div className="space-y-4">
+      <div className="mt-6 space-y-3">
         {loading ? (
-          <div className="text-center py-16 text-on-surface-variant font-mono flex flex-col items-center justify-center space-y-2">
+          <div className="text-center py-20 text-on-surface-variant font-mono flex flex-col items-center justify-center space-y-2">
             <span className="material-symbols-outlined text-[28px] animate-spin text-primary">sync</span>
-            <span>Loading activity audit logs...</span>
+            <span className="text-xs">Loading activity audit logs...</span>
           </div>
-        ) : filteredLogs.length === 0 ? (
+        ) : logs.length === 0 ? (
           <div className="text-center py-16 px-4 rounded-2xl bg-surface-container-low border border-outline-variant/20 flex flex-col items-center justify-center space-y-3">
             <div className="w-12 h-12 rounded-xl bg-primary-container/20 text-primary flex items-center justify-center">
               <span className="material-symbols-outlined text-[28px]">history</span>
             </div>
-            <h3 className="font-semibold text-on-surface text-base">
-              {logs.length === 0 ? 'No Activity Logs Recorded' : 'No Matching Logs Found'}
-            </h3>
+            <h3 className="font-semibold text-on-surface text-sm">No Logs Found</h3>
             <p className="text-xs text-on-surface-variant max-w-md">
-              {logs.length === 0
-                ? 'Agent operations, tool synthesis, verification traces, and runtime actions will automatically appear here as tasks run.'
-                : 'Try selecting a different filter above.'}
+              {sessionIdFilter
+                ? `No activity logs recorded for session '${sessionIdFilter}'.`
+                : 'No logs match your selected filter criteria.'}
             </p>
           </div>
         ) : (
-          filteredLogs.map((log) => {
-            const isError = log.status === 'error' || log.status === 'failed';
+          logs.map((log) => {
+            const isError = log.status === 'error' || log.status === 'failed' || log.status === 'security_violation';
+            let summary = log.details || '';
+            try {
+              const obj = JSON.parse(log.details);
+              summary = obj.summary || log.details;
+            } catch (_) {}
+
             return (
               <div
                 key={log.id}
-                className="bg-surface-container-low rounded-2xl p-4 sm:p-5 shadow-sm hover:bg-surface-container/60 transition-all border border-outline-variant/10"
+                className="bg-surface-container-low rounded-2xl p-4 sm:p-5 shadow-sm hover:bg-surface-container/60 transition border border-outline-variant/15 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
               >
-                <div className="flex items-start space-x-3.5">
+                <div className="flex items-start space-x-3.5 min-w-0">
                   <div
                     className={`w-9 h-9 rounded-xl flex items-center justify-center mt-0.5 shrink-0 ${
                       isError ? 'bg-error-container/20 text-error' : 'bg-primary-container/20 text-primary'
                     }`}
                   >
                     <span className="material-symbols-outlined text-[19px]">
-                      {isError ? 'warning' : 'info'}
+                      {log.status === 'security_violation' ? 'security' : isError ? 'warning' : 'check_circle'}
                     </span>
                   </div>
-                  <div className="flex-1 min-w-0">
+
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span
-                        className={`font-label-sm text-label-sm uppercase tracking-wider font-semibold ${
-                          isError ? 'text-error' : 'text-primary'
+                        className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md border font-mono ${
+                          isError ? 'text-error border-error/20 bg-error-container/10' : 'text-primary border-primary/20 bg-primary-container/10'
                         }`}
                       >
                         {log.action}
                       </span>
                       <span className="text-on-surface-variant/40">•</span>
-                      <span className="font-mono text-xs text-on-surface-variant">
+                      <span className="font-mono text-[11px] text-on-surface-variant">
                         {log.created_at ? new Date(log.created_at).toLocaleString() : ''}
                       </span>
                     </div>
 
-                    {log.session_id && (
-                      <h3 className="font-body-md text-xs sm:text-sm font-semibold text-on-surface mt-1 truncate">
-                        Session: {log.session_id}
-                      </h3>
-                    )}
+                    <p className="text-xs sm:text-sm text-on-surface font-medium mt-1.5 leading-relaxed line-clamp-2">
+                      {summary}
+                    </p>
 
-                    {/* Expandable Trace Viewer */}
-                    <details className="mt-2.5 group">
-                      <summary className="text-xs text-primary cursor-pointer hover:underline flex items-center space-x-1 select-none font-medium">
-                        <span className="material-symbols-outlined text-[15px]">terminal</span>
-                        <span>View Execution Details</span>
-                        <span className="material-symbols-outlined text-[14px] group-open:rotate-180 transition-transform">
-                          expand_more
-                        </span>
-                      </summary>
-                      <pre className="mt-2 font-mono text-xs text-on-surface bg-surface-container-lowest/90 p-3.5 rounded-xl border border-outline-variant/20 whitespace-pre-wrap overflow-x-auto max-h-64 custom-scrollbar leading-relaxed">
-                        {log.details || 'No additional trace details.'}
-                      </pre>
-                    </details>
+                    {log.session_id && (
+                      <span className="inline-block mt-1 font-mono text-[11px] text-outline">
+                        Session ID: {log.session_id}
+                      </span>
+                    )}
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setInspectingLog(log)}
+                  className="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary border border-outline-variant/20 transition flex items-center space-x-1.5 shrink-0 self-end sm:self-center"
+                >
+                  <span className="material-symbols-outlined text-[16px]">visibility</span>
+                  <span>Inspect Trace</span>
+                </button>
               </div>
             );
           })
         )}
       </div>
+
+      {/* Deep Trace Inspector Modal */}
+      {inspectingLog && (
+        <LogTraceModal
+          isOpen={Boolean(inspectingLog)}
+          log={inspectingLog}
+          onClose={() => setInspectingLog(null)}
+          showToast={showToast}
+        />
+      )}
     </main>
   );
 };

@@ -6,6 +6,7 @@ from agents.llm import llm
 from agents.utils import extract_json_from_text
 from agents.research.engine import ResearchEngine
 from langchain_core.messages import SystemMessage, HumanMessage
+from observability import emit_agent_event, AgentLifecycleEvent
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,18 @@ async def repair_node(state: AgentState) -> dict:
     attempts = state.get("repair_attempts", 0)
     errors = state.get("sandbox_results", "")
     code = state.get("generated_code", "")
+    user_id = state.get("user_id", "")
+    session_id = state.get("session_id", "")
+
+    if user_id:
+        await emit_agent_event(
+            user_id=user_id,
+            session_id=session_id,
+            event=AgentLifecycleEvent.REPAIR_ATTEMPT,
+            status="in_progress",
+            summary=f"Synthesizing repair patch based on sandbox failures (attempt {attempts + 1})...",
+            data={"attempt": attempts + 1, "errors": errors[:500]},
+        )
 
     repair_guidance = ""
     if errors:

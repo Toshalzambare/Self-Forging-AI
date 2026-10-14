@@ -4,6 +4,7 @@ from agents.state import AgentState
 from agents.llm import llm
 from agents.utils import extract_json_from_text
 from langchain_core.messages import SystemMessage, HumanMessage
+from observability import emit_agent_event, AgentLifecycleEvent
 
 async def tester_node(state: AgentState) -> dict:
     """
@@ -14,6 +15,18 @@ async def tester_node(state: AgentState) -> dict:
     code = state.get("generated_code", "")
     if not code:
         return {}
+
+    user_id = state.get("user_id", "")
+    session_id = state.get("session_id", "")
+    if user_id:
+        await emit_agent_event(
+            user_id=user_id,
+            session_id=session_id,
+            event=AgentLifecycleEvent.SANDBOX_TESTING,
+            status="in_progress",
+            summary="Generating adversarial edge-case unit test suite...",
+            data={"has_code": True},
+        )
     
     sys_prompt = SystemMessage(content="""
 You are the Adversarial Tester. Your job is to read the provided Python code and generate a suite of 3-5 Pytest tests.

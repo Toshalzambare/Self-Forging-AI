@@ -6,6 +6,7 @@ from agents.llm import llm
 from agents.utils import extract_json_from_text
 from agents.research.engine import ResearchEngine
 from langchain_core.messages import SystemMessage, HumanMessage
+from observability import emit_agent_event, AgentLifecycleEvent
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,18 @@ async def forge_node(state: AgentState) -> dict:
     capability = state.get("missing_capability", "")
     if not capability:
         return {}
+
+    user_id = state.get("user_id", "")
+    session_id = state.get("session_id", "")
+    if user_id:
+        await emit_agent_event(
+            user_id=user_id,
+            session_id=session_id,
+            event=AgentLifecycleEvent.FORGE_STARTED,
+            status="in_progress",
+            summary=f"Synthesizing new tool for capability: {capability[:100]}...",
+            data={"capability": capability},
+        )
 
     doc_context = state.get("documentation_context")
     if not doc_context:

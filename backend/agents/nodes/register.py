@@ -11,6 +11,7 @@ from agents.state import AgentState
 from registry.database import get_db
 from registry.repository import RegistryRepository
 from registry.mcp_manager import dynamic_mcp_registry
+from observability import emit_agent_event, AgentLifecycleEvent
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +72,10 @@ async def register_node(state: AgentState) -> dict:
                 status="active"
             )
 
+            session_id = state.get("session_id") or "forge_pipeline"
             await RegistryRepository.add_log(
                 db,
-                session_id="forge_pipeline",
+                session_id=session_id,
                 action="TOOL_REGISTERED",
                 details=f"Tool '{tool_name}' ({tool.id}) successfully forged, verified, and persisted.",
                 user_id=user_id,
@@ -87,6 +89,19 @@ async def register_node(state: AgentState) -> dict:
             code=code,
             schema=schema if isinstance(schema, dict) else {},
         )
+
+        if user_id:
+            try:
+                await emit_agent_event(
+                    user_id=user_id,
+                    session_id=session_id,
+                    event=AgentLifecycleEvent.TOOL_VERIFIED,
+                    status="success",
+                    summary=f"Tool '{tool_name}' verified and hot-swapped into dynamic MCP registry.",
+                    data={"tool_name": tool_name, "tool_id": str(tool.id)},
+                )
+            except Exception as emit_err:
+                logger.warning("Failed emitting TOOL_VERIFIED event for tool '%s': %s", tool_name, str(emit_err))
 
         logger.info(
             "Registered tool '%s' with ID %s under tenant '%s'",

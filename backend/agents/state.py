@@ -36,6 +36,9 @@ class AgentState(TypedDict):
     # Authenticated user/tenant ID for namespace isolation
     user_id: str
 
+    # Conversation / Session ID for observability tracing
+    session_id: str
+
     # Tool registration status & UUID in database
     is_registered: bool
     registered_tool_id: str

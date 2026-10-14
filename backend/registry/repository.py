@@ -289,11 +289,25 @@ class RegistryRepository:
         return log
 
     @staticmethod
-    async def list_logs(db: AsyncSession, limit: int = 100,
-                        user_id: str | None = None) -> list[ActivityLog]:
-        stmt = select(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(limit)
+    async def list_logs(
+        db: AsyncSession,
+        limit: int = 100,
+        offset: int = 0,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        status: str | None = None,
+    ) -> list[ActivityLog]:
+        stmt = select(ActivityLog).order_by(ActivityLog.created_at.desc())
         if user_id:
             stmt = stmt.where(ActivityLog.user_id == user_id)
+        if session_id:
+            stmt = stmt.where(ActivityLog.session_id == session_id)
+        if status and status.lower() != "all":
+            if status.lower() == "failed":
+                stmt = stmt.where(ActivityLog.status.in_(["failed", "error"]))
+            else:
+                stmt = stmt.where(ActivityLog.status == status)
+        stmt = stmt.offset(offset).limit(limit)
         result = await db.execute(stmt)
         return list(result.scalars().all())
 

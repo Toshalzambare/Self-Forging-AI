@@ -10,6 +10,7 @@ from agents.llm import llm
 from agents.utils import extract_json_from_text
 from agents.execution.tool_runner import execute_tool, extract_tool_arguments
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from observability import emit_agent_event, AgentLifecycleEvent
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,16 @@ Formulate the final response:
         err = exec_result.get("error", "Unknown error")
         reply = f"The tool was registered, but runtime execution encountered an error: {err}"
 
+    if user_id:
+        await emit_agent_event(
+            user_id=user_id,
+            session_id=state.get("session_id", ""),
+            event=AgentLifecycleEvent.TOOL_VERIFIED,
+            status="success" if exec_result.get("success") else "failed",
+            summary=f"Runtime execution of verified tool '{tool_id}' finished.",
+            data={"tool_id": tool_id, "success": exec_result.get("success")},
+        )
+
     return {
         "missing_capability": "",
         "messages": [
@@ -95,6 +106,17 @@ async def core_node(state: AgentState) -> dict:
 
     task_prompt = _extract_user_prompt(messages, state.get("task", ""))
     user_id = state.get("user_id")
+    session_id = state.get("session_id", "")
+
+    if user_id and task_prompt:
+        await emit_agent_event(
+            user_id=user_id,
+            session_id=session_id,
+            event=AgentLifecycleEvent.AGENT_THINKING,
+            status="in_progress",
+            summary="Analyzing task and evaluating tool registry...",
+            data={"task": task_prompt[:120]},
+        )
 
     # 1. Novel Hybrid Tool Search: Check if existing tool in registry matches user request
     if task_prompt:
@@ -133,6 +155,16 @@ async def core_node(state: AgentState) -> dict:
                             schema=tool.schema_json,
                         )
                         exec_result = await execute_tool(user_id=user_id, tool_id_or_name=tool.id, arguments=args)
+
+                        if user_id:
+                            await emit_agent_event(
+                                user_id=user_id,
+                                session_id=session_id,
+                                event=AgentLifecycleEvent.TOOL_REUSED,
+                                status="success",
+                                summary=f"Reused verified tool '{tool.name}' (Gate score: {tool.gate_score:.2f}).",
+                                data={"tool_name": tool.name, "tool_id": str(tool.id)},
+                            )
 
                         if exec_result.get("success"):
                             sys_prompt = SystemMessage(content="""

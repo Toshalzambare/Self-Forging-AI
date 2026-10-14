@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ConversationSidebar from '../components/conversation/ConversationSidebar.jsx';
 import ChatMessage from '../components/conversation/ChatMessage.jsx';
 import ChatInput from '../components/conversation/ChatInput.jsx';
@@ -14,6 +15,7 @@ const ConversationPage = ({
 }) => {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef(null);
+  const navigate = useNavigate();
 
   const {
     conversations,
@@ -116,11 +118,23 @@ const ConversationPage = ({
               <span className="truncate max-w-[80px] sm:max-w-[120px]">{selectedModel}</span>
             </button>
 
+            {activeId && (
+              <button
+                type="button"
+                onClick={() => navigate(`/activity-logs?session_id=${encodeURIComponent(activeId)}`)}
+                className="hidden sm:flex items-center space-x-1 px-2.5 py-1 text-xs text-slate-300 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition border border-slate-800"
+                title="View audit logs for this conversation"
+              >
+                <span className="material-symbols-outlined text-[16px] text-primary">description</span>
+                <span>Session Logs</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onToggleLogsDrawer}
               className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition"
-              title="View live action logs"
+              title="Toggle live agent activity stream"
             >
               <span className="material-symbols-outlined text-[20px]">browse_activity</span>
             </button>
