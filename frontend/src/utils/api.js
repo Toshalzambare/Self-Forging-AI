@@ -67,6 +67,7 @@ export async function refreshTokens() {
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
     clearSession();
+    window.dispatchEvent(new CustomEvent('sfa-auth-expired'));
     throw new Error('No refresh token available');
   }
 

@@ -1,36 +1,37 @@
 """
-Test script to verify OmniRoute connection from this laptop
-to the OmniRoute instance running on the other laptop.
+Test script to verify OmniRoute connection from this machine
+to an OmniRoute instance across your local network.
 
 INSTRUCTIONS:
-1. Find the IP of the laptop running OmniRoute:
-   - On THAT laptop, open terminal and run: ipconfig
-   - Look for "IPv4 Address" under Wi-Fi (e.g., 192.168.1.105)
+1. Ensure .env contains your configuration:
+   - OMNIROUTE_IP=<ip_of_omniroute_host>
+   - OMNIROUTE_PORT=20128
+   - OMNIROUTE_API_KEY=<your_api_key>
+   - OMNIROUTE_MODEL=auto
 
-2. Replace OMNIROUTE_IP below with that IP address.
+2. Prerequisites:
+   pip install openai python-dotenv
 
-3. Replace OMNIROUTE_API_KEY with your actual OmniRoute API key.
-
-4. Run: pip install openai
-   Then: python test_omniroute.py
+3. Run:
+   python scripts/test_omniroute.py
 """
 
 from openai import OpenAI
 
-# ============================================================
-# CONFIGURE THESE TWO VALUES
-# ============================================================
+from pathlib import Path
 from dotenv import load_dotenv
 import os
 
-load_dotenv("C:\devlopment\Final Year Project\Self-Forging-AI\.env")
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
-OMNIROUTE_IP = "192.168.1.3"
+OMNIROUTE_IP = os.getenv("OMNIROUTE_IP", "127.0.0.1")
+OMNIROUTE_PORT = os.getenv("OMNIROUTE_PORT", "20128")
 OMNIROUTE_API_KEY = os.getenv("OMNIROUTE_API_KEY")
-MODEL = "auto"
+MODEL = os.getenv("OMNIROUTE_MODEL", "auto")
 # ============================================================
 
-OMNIROUTE_URL = f"http://{OMNIROUTE_IP}:20128/v1"
+OMNIROUTE_URL = f"http://{OMNIROUTE_IP}:{OMNIROUTE_PORT}/v1"
 
 def main():
     print(f"🔌 Connecting to OmniRoute at: {OMNIROUTE_URL}")
@@ -85,9 +86,9 @@ def main():
         print("  1. Is Docker running on the other laptop?")
         print("  2. Is OmniRoute container running? (docker ps)")
         print("  3. Is the IP address correct? (run ipconfig on that laptop)")
-        print("  4. Is Windows Firewall blocking port 20128?")
+        print(f"  4. Is Windows Firewall blocking port {OMNIROUTE_PORT}?")
         print("     → On the OmniRoute laptop, run this in Admin PowerShell:")
-        print('     → netsh advfirewall firewall add rule name="OmniRoute" dir=in action=allow protocol=TCP localport=20128')
+        print(f'     → netsh advfirewall firewall add rule name="OmniRoute" dir=in action=allow protocol=TCP localport={OMNIROUTE_PORT}')
 
 
 if __name__ == "__main__":

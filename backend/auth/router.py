@@ -103,9 +103,9 @@ def format_user_profile(user: User) -> UserProfile:
 def extract_client_info(request: Request) -> tuple[Optional[str], Optional[str]]:
     user_agent = request.headers.get("user-agent")
     client_ip = request.client.host if request.client else None
-    # Forwarded header support
+    # Only trust forwarded-for if request arrived from a configured trusted proxy
     forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
+    if forwarded_for and client_ip in config.TRUSTED_PROXIES:
         client_ip = forwarded_for.split(",")[0].strip()
     return user_agent, client_ip
 
@@ -253,6 +253,12 @@ async def google_auth(
             detail="Google profile is missing required email or subject ID.",
         )
 
+    if id_info.get("email_verified") is not True:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google account email address is not verified.",
+        )
+
     name = id_info.get("name") or email.split("@")[0]
     picture = id_info.get("picture")
 
@@ -388,9 +394,17 @@ async def logout(
 ):
     """
     Revoke the provided refresh token session in the database.
+    If authenticated, verifies that the session belongs to the current user.
     """
     if req.refresh_token:
-        await RegistryRepository.revoke_session(db, req.refresh_token)
+        session = await RegistryRepository.get_session_by_token(db, req.refresh_token)
+        if session:
+            if current_user and str(session.user_id) != str(current_user.id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Cannot revoke a session belonging to another user.",
+                )
+            await RegistryRepository.revoke_session(db, req.refresh_token)
 
     return {"message": "Logged out successfully."}
 

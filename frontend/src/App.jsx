@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 import { APP_NAME, DEFAULT_MODEL } from './config.js';
@@ -24,10 +24,10 @@ const App = () => {
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [toast, setToast] = useState({ visible: false, title: '', message: '' });
 
-  const showToast = (title, message) => {
+  const showToast = useCallback((title, message) => {
     setToast({ visible: true, title, message });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
-  };
+  }, []);
 
   const handleLogin = (userData) => {
     setUser(userData);

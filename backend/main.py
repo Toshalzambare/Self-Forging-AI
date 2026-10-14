@@ -111,7 +111,7 @@ async def health():
 async def health_check():
     """Combined health check for DB and storage."""
     db_ok = await check_db_connection()
-    storage_ok = check_storage_connection()
+    storage_ok = await asyncio.to_thread(check_storage_connection)
 
     overall = "ok" if db_ok and storage_ok else "degraded"
     status_code = 200 if overall == "ok" else 503
@@ -288,7 +288,7 @@ async def list_providers(current_user: User = Depends(get_current_user)):
                 "id": p.id,
                 "name": p.name,
                 "description": p.description,
-                "api_key": p.api_key,
+                "has_api_key": bool(p.api_key),
                 "is_active": p.is_active,
                 "created_at": p.created_at.isoformat() if p.created_at else None,
             }

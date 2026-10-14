@@ -73,7 +73,8 @@ async def test_registry_repository_crud():
         logs = await RegistryRepository.list_logs(db, limit=10)
         assert any(l.session_id == session_id for l in logs)
 
-        # Verify providers and mcp_servers are seeded
+        # Verify providers and mcp_servers can be seeded and listed
+        await RegistryRepository.seed_defaults(db)
         providers = await RegistryRepository.list_providers(db)
         assert len(providers) >= 3
 

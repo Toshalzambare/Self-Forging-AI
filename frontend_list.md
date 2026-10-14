@@ -102,17 +102,21 @@ A tabbed administration dashboard for managing LLM connections, MCP servers, and
   * Shows provider badges, context limits, and token cost indicators.
 * **Toast Notification System (`Toast.jsx`)**:
   * Global animated toast alerts for async actions (e.g., settings saved, connection tests, error alerts).
-* **Developer Authentication Gate (`LoginPage.jsx`)**:
-  * Simple development login screen utilizing environment-configured credentials (`VITE_DEMO_USERNAME`, `VITE_DEMO_PASSWORD`).
+* **Secure Multi-Tenant Authentication Gate (`LoginPage.jsx`)**:
+  * Dual-mode authentication: Email/Password signup & login, and Google OAuth 2.0 one-tap/button sign-in.
+  * Development mode mock login (`ALLOW_MOCK_GOOGLE_AUTH=true`) for offline development without GCP credentials.
+  * Comprehensive client-side form validation, password visibility toggle, and error banner notifications.
 
 ---
 
 ## 6. Architecture & Foundation
 
-* **Centralized API Client (`config.js`)**:
-  * Unified `apiFetch` wrapper ensuring all frontend calls handle authentication headers, base URLs, and error responses consistently.
+* **Centralized Authenticated API Client (`utils/api.js`)**:
+  * Dual-token management storing 15-minute access token and 7-day refresh token in `localStorage`.
+  * Transparent request interceptor automatically retrying upon 401 Unauthorized using atomic refresh tokens.
+  * Dispatches `sfa-auth-expired` custom events for graceful logout and re-authentication across all tabs.
 * **Environment-Driven Configuration**:
-  * Controlled via `.env` / `.env.example` (`VITE_API_BASE_URL`, `VITE_APP_NAME`, `VITE_DEFAULT_MODEL`).
+  * Controlled via `.env` / `.env.example` (`VITE_API_BASE_URL`, `VITE_APP_NAME`, `VITE_DEFAULT_MODEL`, `VITE_GOOGLE_CLIENT_ID`).
 * **Design & Styling**:
   * Dark-mode glassmorphic theme with Tailwind CSS.
   * Google Material Symbols iconography.

@@ -17,7 +17,7 @@ const ActivityLogsPage = ({ showToast, user }) => {
       }
     };
     fetchLogs();
-  }, [showToast]);
+  }, []);
 
   return (
     <main className="pt-20 min-h-screen bg-surface px-4 sm:px-6 py-6 max-w-7xl mx-auto w-full pb-16">

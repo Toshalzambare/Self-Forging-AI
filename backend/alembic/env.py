@@ -13,10 +13,10 @@ from config import config as app_config
 
 # Alembic Config
 alembic_config = context.config
-alembic_config.set_main_option("sqlalchemy.url", app_config.POSTGRES_URL)
+alembic_config.set_main_option("sqlalchemy.url", app_config.POSTGRES_URL.replace("%", "%%"))
 
 if alembic_config.config_file_name:
-    fileConfig(alembic_config.config_file_name)
+    fileConfig(alembic_config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

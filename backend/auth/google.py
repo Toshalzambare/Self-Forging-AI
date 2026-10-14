@@ -22,18 +22,31 @@ def verify_google_credential(credential: str) -> Optional[Dict[str, Any]]:
         return None
 
     try:
-        # Development & testing mock token support
-        if credential.startswith("mock-google-token-"):
+        # Development & testing mock token support (explicit opt-in only)
+        if config.ALLOW_MOCK_GOOGLE_AUTH and credential.startswith("mock-google-token-"):
             email = credential.replace("mock-google-token-", "").strip().lower()
+            import re
+            if not email or not re.match(r"^[\w\.\-]+@[\w\.\-]+\.[a-zA-Z]{2,}$", email):
+                return None
+
+            # Restrict mock logins strictly to configured test domains only
+            if not email.endswith(config.MOCK_GOOGLE_DOMAINS):
+                return None
+
             return {
                 "sub": f"mock-google-id-{email}",
                 "email": email,
                 "name": email.split("@")[0].title(),
                 "picture": None,
                 "email_verified": True,
+                "is_mock": True,
             }
 
-        client_id = config.GOOGLE_CLIENT_ID if config.GOOGLE_CLIENT_ID else None
+        # Reject real Google tokens if GOOGLE_CLIENT_ID is not configured
+        if not config.GOOGLE_CLIENT_ID:
+            return None
+
+        client_id = config.GOOGLE_CLIENT_ID
         request = requests.Request()
         id_info = id_token.verify_oauth2_token(credential, request, audience=client_id)
 

@@ -81,11 +81,16 @@ class RegistryRepository:
         db: AsyncSession,
         user: User,
         google_id: str,
-        avatar_url: Optional[str] = None
+        avatar_url: Optional[str] = None,
+        clear_unverified_password: bool = True,
     ) -> User:
         user.google_id = google_id
         if avatar_url and not user.avatar_url:
             user.avatar_url = avatar_url
+        if clear_unverified_password and user.password_hash:
+            # Neutralize pre-account takeover by clearing attacker-set local password
+            user.password_hash = None
+            user.auth_provider = "google"
         await db.flush()
         return user
 

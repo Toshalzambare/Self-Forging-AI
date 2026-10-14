@@ -50,9 +50,15 @@ def execute_in_sandbox(code: str, tests: str) -> Tuple[bool, str]:
                 stdout=True,
             )
 
-            result = container.wait(timeout=config.DOCKER_SANDBOX_TIMEOUT)
-            logs = container.logs().decode("utf-8")
-            container.remove(force=True)
+            try:
+                try:
+                    result = container.wait(timeout=config.DOCKER_SANDBOX_TIMEOUT)
+                except Exception:
+                    logs = container.logs().decode("utf-8", errors="replace")
+                    return False, f"Sandbox timed out after {config.DOCKER_SANDBOX_TIMEOUT}s:\n{logs}"
+                logs = container.logs().decode("utf-8", errors="replace")
+            finally:
+                container.remove(force=True)
 
             if result.get("StatusCode") == 0:
                 return True, logs

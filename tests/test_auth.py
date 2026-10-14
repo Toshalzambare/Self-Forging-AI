@@ -82,8 +82,8 @@ def test_google_token_verification():
     assert verify_google_credential("invalid-token") is None
     assert verify_google_credential("") is None
 
-    # Mock dev token
-    mock_email = "alex.dev@gmail.com"
+    # Mock dev token (using reserved test domain @example.com)
+    mock_email = "alex.dev@example.com"
     payload = verify_google_credential(f"mock-google-token-{mock_email}")
     assert payload is not None
     assert payload["email"] == mock_email
@@ -151,7 +151,7 @@ def test_google_auth_provisioning_and_linking():
     """Verify Google OAuth auto-provisioning and existing account linking."""
     client = TestClient(app)
     uid = uuid.uuid4().hex[:8]
-    google_email = f"google_{uid}@gmail.com"
+    google_email = f"google_{uid}@example.com"
     mock_token = f"mock-google-token-{google_email}"
 
     # 1. First-time login with Google -> auto provisions user
@@ -169,7 +169,7 @@ def test_google_auth_provisioning_and_linking():
     assert data2["user"]["id"] == user_id
 
     # 3. Account linking: local signup first, then Google auth with same email
-    local_email = f"link_{uid}@gmail.com"
+    local_email = f"link_{uid}@example.com"
     client.post("/api/auth/signup", json={
         "email": local_email,
         "username": f"link_{uid}",

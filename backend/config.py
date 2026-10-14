@@ -79,6 +79,13 @@ class Config:
     # Google OAuth 2.0
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    ALLOW_MOCK_GOOGLE_AUTH: bool = os.getenv("ALLOW_MOCK_GOOGLE_AUTH", "false").lower() == "true"
+    _mock_domains_str: str = os.getenv("MOCK_GOOGLE_DOMAINS", "@example.test,@example.com,@test.local")
+    MOCK_GOOGLE_DOMAINS: tuple[str, ...] = tuple(x.strip() for x in _mock_domains_str.split(",") if x.strip())
+
+    # Trusted Proxies for client IP extraction
+    _trusted_proxies_str: str = os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1,localhost")
+    TRUSTED_PROXIES: set[str] = {x.strip() for x in _trusted_proxies_str.split(",") if x.strip()}
 
     @classmethod
     def validate(cls) -> list[str]:
@@ -90,6 +97,13 @@ class Config:
             warnings.append("OMNIROUTE_BASE_URL is not set.")
         if not cls.POSTGRES_URL or "changeme" in cls.POSTGRES_URL:
             warnings.append("POSTGRES_URL uses default credentials - update before production use.")
+        if cls.JWT_SECRET_KEY in (
+            "sfa_jwt_dev_secret_change_in_production_key_128bit",
+            "generate_a_random_32_char_secret_key_here",
+        ) or len(cls.JWT_SECRET_KEY) < 32:
+            warnings.append("JWT_SECRET_KEY uses a default or weak value - tokens can be forged.")
+        if cls.ALLOW_MOCK_GOOGLE_AUTH:
+            warnings.append("ALLOW_MOCK_GOOGLE_AUTH is enabled. Never enable it in production.")
         return warnings
 
 

@@ -15,7 +15,12 @@ def _get_client():
         endpoint_url=endpoint,
         aws_access_key_id=config.MINIO_ACCESS_KEY,
         aws_secret_access_key=config.MINIO_SECRET_KEY,
-        config=BotoConfig(signature_version="s3v4"),
+        config=BotoConfig(
+            signature_version="s3v4",
+            connect_timeout=3,
+            read_timeout=10,
+            retries={"max_attempts": 1},
+        ),
         region_name="us-east-1",  # MinIO doesn't enforce region; required by boto3
     )
 

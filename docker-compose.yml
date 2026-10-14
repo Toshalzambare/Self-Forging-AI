@@ -42,7 +42,7 @@ services:
 
   # ─── MinIO Bucket Initializer (runs once then exits) ─────────────────────────
   minio-init:
-    image: cgr.dev/chainguard/minio:latest
+    image: minio/mc:latest
     container_name: sfa_minio_init
     depends_on:
       minio:

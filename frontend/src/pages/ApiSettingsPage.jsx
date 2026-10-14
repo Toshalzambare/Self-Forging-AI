@@ -12,9 +12,13 @@ const ApiSettingsPage = ({ showToast, user }) => {
 
   useEffect(() => {
     if (activeTab === 'providers') {
-      apiFetch('/api/settings/providers').then(data => setProviders(data.providers || []));
+      apiFetch('/api/settings/providers')
+        .then(data => setProviders(data.providers || []))
+        .catch(err => showToast?.('Error', err.message));
     } else if (activeTab === 'endpoints') {
-      apiFetch('/api/settings/mcp_servers').then(data => setMcpServers(data.mcp_servers || []));
+      apiFetch('/api/settings/mcp_servers')
+        .then(data => setMcpServers(data.mcp_servers || []))
+        .catch(err => showToast?.('Error', err.message));
     }
   }, [activeTab]);
 
@@ -120,7 +124,11 @@ const ApiSettingsPage = ({ showToast, user }) => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                       <div className="md:col-span-8 relative">
-                        <input className="w-full px-4 py-2.5 rounded-xl bg-surface-container text-on-surface font-mono text-xs tracking-wider focus:outline-none focus:bg-surface-container-high transition-colors" type="password" defaultValue={p.api_key} />
+                        <input
+                          className="w-full px-4 py-2.5 rounded-xl bg-surface-container text-on-surface font-mono text-xs tracking-wider focus:outline-none focus:bg-surface-container-high transition-colors"
+                          type="password"
+                          placeholder={p.has_api_key ? "•••••••••••••••• (configured)" : "Enter API key"}
+                        />
                       </div>
                       <div className="md:col-span-4 flex items-center space-x-2">
                         <button onClick={() => handleTestKey(p.name)} disabled={testingProvider === p.name} className="flex-1 px-3 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-body-sm text-body-sm transition-all flex items-center justify-center space-x-1.5">
@@ -187,7 +195,7 @@ const ApiSettingsPage = ({ showToast, user }) => {
               </div>
               <div className="bg-surface-container-low rounded-2xl p-6 shadow-sm">
                 <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface">{user?.username || 'User'}</h3>
-                <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">{user?.username?.toLowerCase() || 'user'}@{APP_NAME.toLowerCase().replace(' ', '')}.local</p>
+                <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">{user?.email || `${user?.username || 'user'}@local`}</p>
               </div>
             </div>
           )}
