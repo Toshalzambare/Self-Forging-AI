@@ -232,6 +232,45 @@ class RegistryRepository:
         result = await db.execute(select(Tool).where(Tool.id == tool_id))
         return result.scalar_one_or_none()
 
+    @staticmethod
+    async def update_tool_status(
+        db: AsyncSession,
+        tool_id: str,
+        user_id: str,
+        status: str,
+    ) -> Optional[Tool]:
+        """Update tool status with strict tenant ownership check."""
+        stmt = select(Tool).where(Tool.id == tool_id)
+        res = await db.execute(stmt)
+        tool = res.scalar_one_or_none()
+        if not tool:
+            return None
+        # Enforce tenant ownership: cannot modify other user's tools or global system tools
+        if tool.user_id is None or str(tool.user_id) != str(user_id):
+            return None
+        tool.status = status
+        await db.flush()
+        return tool
+
+    @staticmethod
+    async def delete_tool(
+        db: AsyncSession,
+        tool_id: str,
+        user_id: str,
+    ) -> bool:
+        """Delete tool with strict tenant ownership check."""
+        stmt = select(Tool).where(Tool.id == tool_id)
+        res = await db.execute(stmt)
+        tool = res.scalar_one_or_none()
+        if not tool:
+            return False
+        # Enforce tenant ownership: cannot delete other user's tools or global system tools
+        if tool.user_id is None or str(tool.user_id) != str(user_id):
+            return False
+        await db.delete(tool)
+        await db.flush()
+        return True
+
     # ── Logs ───────────────────────────────────────────────────────────────────
 
     @staticmethod

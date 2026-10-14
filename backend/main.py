@@ -5,8 +5,9 @@ Self-Forging AI Agent - FastAPI Backend Entry Point
 import uuid
 import asyncio
 import logging
+import re
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -14,7 +15,8 @@ from langchain_core.messages import HumanMessage
 
 from config import config
 from agents.graph import build_graph
-from registry import get_db, check_db_connection, RegistryRepository, User
+from registry import get_db, check_db_connection, RegistryRepository, User, dynamic_mcp_registry
+from registry.sfatool import export_sfatool_payload, validate_sfatool_payload, verify_import_security
 from auth import auth_router, get_current_user
 from storage import check_storage_connection
 from conversation import conversation_router, ConversationService
@@ -301,9 +303,13 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
 # Tools Registry Endpoints (PostgreSQL backed, user-scoped)
 # ============================================================
 
+class ToolStatusUpdate(BaseModel):
+    status: str
+
+
 @app.get("/api/tools")
 async def list_tools(current_user: User = Depends(get_current_user)):
-    """List all forged and registered tools for the authenticated user."""
+    """List all forged and registered tools with metrics for the authenticated user."""
     async with get_db() as db:
         tools = await RegistryRepository.list_tools(db, user_id=str(current_user.id))
         tool_list = [
@@ -313,12 +319,181 @@ async def list_tools(current_user: User = Depends(get_current_user)):
                 "description": t.description,
                 "code": t.code,
                 "schema": t.schema_json,
+                "tests_code": t.tests_code,
                 "status": t.status,
+                "reuse_count": t.reuse_count or 0,
+                "success_rate": round(float(t.success_rate or 0.0), 4),
+                "gate_score": round(float(t.gate_score or 0.0), 4),
+                "last_used_at": t.last_used_at.isoformat() if t.last_used_at else None,
                 "created_at": t.created_at.isoformat() if t.created_at else None,
             }
             for t in tools
         ]
         return {"tools": tool_list, "count": len(tool_list)}
+
+
+@app.patch("/api/tools/{tool_id}/status")
+async def update_tool_status(
+    tool_id: str,
+    payload: ToolStatusUpdate,
+    current_user: User = Depends(get_current_user),
+):
+    """Toggle tool status (active, inactive, degraded, quarantined) for the authenticated user."""
+    allowed_statuses = {"active", "inactive", "degraded", "quarantined"}
+    target_status = payload.status.lower().strip()
+    if target_status not in allowed_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status '{payload.status}'. Must be one of: {', '.join(sorted(allowed_statuses))}",
+        )
+
+    async with get_db() as db:
+        updated = await RegistryRepository.update_tool_status(
+            db, tool_id=tool_id, user_id=str(current_user.id), status=target_status
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Tool not found or permission denied")
+        tool_data = {
+            "id": str(updated.id),
+            "name": updated.name,
+            "code": updated.code,
+            "schema_json": updated.schema_json,
+            "status": updated.status,
+        }
+
+    # If deactivated, evict from dynamic in-memory MCP registry; if reactivated, re-register
+    if target_status != "active":
+        dynamic_mcp_registry.unregister_dynamic_tool(str(current_user.id), tool_id)
+    else:
+        dynamic_mcp_registry.register_dynamic_tool(
+            user_id=str(current_user.id),
+            tool_id=tool_data["id"],
+            name=tool_data["name"],
+            code=tool_data["code"],
+            schema=tool_data["schema_json"] or {},
+        )
+
+    return {
+        "status": "success",
+        "tool_id": tool_data["id"],
+        "name": tool_data["name"],
+        "new_status": tool_data["status"],
+    }
+
+
+@app.delete("/api/tools/{tool_id}")
+async def delete_tool(
+    tool_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Permanently delete a tool owned by the authenticated user."""
+    async with get_db() as db:
+        deleted = await RegistryRepository.delete_tool(
+            db, tool_id=tool_id, user_id=str(current_user.id)
+        )
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Tool not found or permission denied")
+
+    # Evict from dynamic in-memory MCP registry after successful DB transaction commit
+    dynamic_mcp_registry.unregister_dynamic_tool(str(current_user.id), tool_id)
+
+    return {"status": "success", "message": f"Tool '{tool_id}' successfully deleted."}
+
+
+@app.get("/api/tools/{tool_id}/export")
+async def export_tool(
+    tool_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Export a registered tool as a portable .sfatool JSON package."""
+    async with get_db() as db:
+        tool = await RegistryRepository.get_tool(db, tool_id=tool_id)
+        if not tool or (tool.user_id and str(tool.user_id) != str(current_user.id)):
+            raise HTTPException(status_code=404, detail="Tool not found or permission denied")
+
+        payload = export_sfatool_payload(tool)
+        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', tool.name or "tool")
+        filename = f"{safe_name}.sfatool"
+        return JSONResponse(
+            content=payload,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type": "application/json",
+            },
+        )
+
+
+@app.post("/api/tools/import")
+async def import_tool(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Import a .sfatool file or JSON payload.
+    Validates structure, enforces AST security profiling gate, and registers under user's namespace.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON format in request body.")
+
+    # 1. Validate .sfatool format and parse Python syntax
+    is_valid, err_msg, cleaned = validate_sfatool_payload(body)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=f"Invalid .sfatool package: {err_msg}")
+
+    # 2. Enforce AST Security Profiling Gate
+    is_safe, sec_reason = verify_import_security(cleaned["code"], cleaned["tests"])
+    if not is_safe:
+        raise HTTPException(status_code=400, detail=sec_reason)
+
+    async with get_db() as db:
+        # 3. Handle name collisions in user namespace
+        existing_tools = await RegistryRepository.list_tools(db, user_id=str(current_user.id))
+        target_name = cleaned["name"]
+        if any(t.name.lower() == target_name.lower() for t in existing_tools):
+            target_name = f"{target_name}_imported_{uuid.uuid4().hex[:6]}"
+
+        # 4. Save into PostgreSQL
+        imported_tool = await RegistryRepository.add_tool(
+            db,
+            name=target_name,
+            description=cleaned["description"] or f"Imported tool {target_name}",
+            code=cleaned["code"],
+            schema=cleaned["schema"],
+            tests_code=cleaned["tests"],
+            user_id=str(current_user.id),
+            status="active",
+        )
+        tool_data = {
+            "id": str(imported_tool.id),
+            "name": imported_tool.name,
+            "description": imported_tool.description,
+            "code": imported_tool.code,
+            "schema_json": imported_tool.schema_json,
+            "status": imported_tool.status,
+        }
+
+    # 5. Hot-swap into dynamic MCP registry after successful DB transaction commit
+    dynamic_mcp_registry.register_dynamic_tool(
+        user_id=str(current_user.id),
+        tool_id=tool_data["id"],
+        name=tool_data["name"],
+        code=tool_data["code"],
+        schema=tool_data["schema_json"] or {},
+    )
+
+    return {
+        "status": "success",
+        "message": f"Tool '{tool_data['name']}' successfully verified and imported.",
+        "tool": {
+            "id": tool_data["id"],
+            "name": tool_data["name"],
+            "description": tool_data["description"],
+            "status": tool_data["status"],
+            "schema": tool_data["schema_json"],
+        },
+    }
 
 
 @app.post("/api/tools/{tool_id}/test")
