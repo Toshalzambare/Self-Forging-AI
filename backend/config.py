@@ -24,6 +24,21 @@ class Config:
     LLM_REQUEST_TIMEOUT: int = int(os.getenv("LLM_REQUEST_TIMEOUT", "60"))
     LLM_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "3"))
 
+    # Autonomous Web Research & Documentation Retrieval
+    SEARCH_PROVIDER: str = os.getenv("SEARCH_PROVIDER", "duckduckgo")
+    SEARCH_MAX_RESULTS: int = int(os.getenv("SEARCH_MAX_RESULTS", "3"))
+    SEARCH_TIMEOUT_SECONDS: int = int(os.getenv("SEARCH_TIMEOUT_SECONDS", "10"))
+    SEARCH_USER_AGENT: str = os.getenv(
+        "SEARCH_USER_AGENT",
+        "SelfForgingAI/1.0 (Autonomous Documentation Research; +https://github.com/Toshalzambare/Self-Forging-AI)"
+    )
+
+    # Novel Hybrid Tool Search Algorithm Weights & Thresholds
+    HYBRID_SEARCH_THRESHOLD: float = float(os.getenv("HYBRID_SEARCH_THRESHOLD", "0.65"))
+    HYBRID_WEIGHT_INTENT: float = float(os.getenv("HYBRID_WEIGHT_INTENT", "0.50"))
+    HYBRID_WEIGHT_STRUCT: float = float(os.getenv("HYBRID_WEIGHT_STRUCT", "0.35"))
+    HYBRID_WEIGHT_PERF: float = float(os.getenv("HYBRID_WEIGHT_PERF", "0.15"))
+
     # Docker Sandbox
     DOCKER_SANDBOX_IMAGE: str = os.getenv("DOCKER_SANDBOX_IMAGE", "sfa-sandbox:latest")
     DOCKER_SANDBOX_TIMEOUT: int = int(os.getenv("DOCKER_SANDBOX_TIMEOUT", "60"))

@@ -222,6 +222,12 @@ class RegistryRepository:
         return list(result.scalars().all())
 
     @staticmethod
+    async def list_global_tools(db: AsyncSession) -> list[Tool]:
+        stmt = select(Tool).where(Tool.user_id.is_(None)).order_by(Tool.created_at.desc())
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
+    @staticmethod
     async def get_tool(db: AsyncSession, tool_id: str) -> Optional[Tool]:
         result = await db.execute(select(Tool).where(Tool.id == tool_id))
         return result.scalar_one_or_none()

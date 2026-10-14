@@ -6,6 +6,7 @@ from agents.nodes.core import core_node
 from agents.nodes.forge import forge_node
 from agents.nodes.tester import tester_node
 from agents.nodes.repair import repair_node
+from agents.nodes.register import register_node
 
 from sandbox.profiler import check_security
 from sandbox.executor import execute_in_sandbox
@@ -30,10 +31,6 @@ async def verify_node(state: AgentState) -> dict:
         "tests_passed": passed,
         "sandbox_results": logs
     }
-
-async def register_node(state: AgentState) -> dict:
-    """Mock node for now. Will save tool to DB and MCP registry."""
-    return {}
 
 def should_forge(state: AgentState) -> str:
     """Router from core node."""

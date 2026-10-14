@@ -1,7 +1,7 @@
 import os
 import tempfile
 import docker
-from typing import Tuple
+from typing import Tuple, Optional
 from config import config
 
 # Initialize docker client
@@ -12,7 +12,7 @@ except Exception as e:
     client = None
 
 
-def execute_in_sandbox(code: str, tests: str) -> Tuple[bool, str]:
+def execute_in_sandbox(code: str, tests: str, timeout: Optional[int] = None) -> Tuple[bool, str]:
     """
     Spawns an ephemeral Docker container to run the Pytest suite against the forged code.
     Uses the pre-cached sfa-sandbox:latest image to eliminate pip install overhead.
@@ -20,6 +20,8 @@ def execute_in_sandbox(code: str, tests: str) -> Tuple[bool, str]:
     """
     if not client:
         return False, "CRITICAL ERROR: Docker daemon is not running or accessible. Cannot execute sandbox."
+
+    sandbox_timeout = timeout or config.DOCKER_SANDBOX_TIMEOUT
 
     # Create a temporary directory to host the code and tests
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -52,10 +54,10 @@ def execute_in_sandbox(code: str, tests: str) -> Tuple[bool, str]:
 
             try:
                 try:
-                    result = container.wait(timeout=config.DOCKER_SANDBOX_TIMEOUT)
+                    result = container.wait(timeout=sandbox_timeout)
                 except Exception:
                     logs = container.logs().decode("utf-8", errors="replace")
-                    return False, f"Sandbox timed out after {config.DOCKER_SANDBOX_TIMEOUT}s:\n{logs}"
+                    return False, f"Sandbox timed out after {sandbox_timeout}s:\n{logs}"
                 logs = container.logs().decode("utf-8", errors="replace")
             finally:
                 container.remove(force=True)

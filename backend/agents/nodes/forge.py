@@ -1,9 +1,13 @@
 import json
+import logging
 from pydantic import BaseModel, Field
 from agents.state import AgentState
 from agents.llm import llm
 from agents.utils import extract_json_from_text
+from agents.research.engine import ResearchEngine
 from langchain_core.messages import SystemMessage, HumanMessage
+
+logger = logging.getLogger(__name__)
 
 async def forge_node(state: AgentState) -> dict:
     """
@@ -14,6 +18,14 @@ async def forge_node(state: AgentState) -> dict:
     capability = state.get("missing_capability", "")
     if not capability:
         return {}
+
+    doc_context = state.get("documentation_context")
+    if not doc_context:
+        try:
+            doc_context = await ResearchEngine.research_capability(capability)
+        except Exception as e:
+            logger.warning("Research capability failed: %s", str(e))
+            doc_context = ""
     
     sys_prompt = SystemMessage(content="""
 You are the Tool Forge. Your job is to write a standalone, robust Python script that implements a required capability.
@@ -30,7 +42,11 @@ Return ONLY a valid JSON object with EXACTLY these two keys:
 }
 """)
 
-    user_prompt = HumanMessage(content=f"Please forge a tool for the following capability:\n{capability}")
+    user_content = f"Please forge a tool for the following capability:\n{capability}"
+    if doc_context:
+        user_content += f"\n\n{doc_context}"
+
+    user_prompt = HumanMessage(content=user_content)
     
     response = await llm.ainvoke([sys_prompt, user_prompt])
     content = response.content
@@ -46,5 +62,6 @@ Return ONLY a valid JSON object with EXACTLY these two keys:
     return {
         "generated_code": python_code,
         "generated_schema": json_schema,
-        "repair_attempts": 0 # Reset attempts for new tool
+        "repair_attempts": 0, # Reset attempts for new tool
+        "documentation_context": doc_context
     }

@@ -183,7 +183,11 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
         "adversarial_tests": "",
         "sandbox_results": "",
         "tests_passed": False,
-        "repair_attempts": 0
+        "repair_attempts": 0,
+        "documentation_context": "",
+        "user_id": str(current_user.id),
+        "is_registered": False,
+        "registered_tool_id": "",
     }
 
     try:
@@ -221,8 +225,8 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
             "tests": final_state.get("adversarial_tests", ""),
         }
 
-        # Save to PostgreSQL registry if tests passed
-        if final_state.get("tests_passed"):
+        # Save to PostgreSQL registry if tests passed and not already registered by graph
+        if final_state.get("tests_passed") and not final_state.get("is_registered"):
             tool_id = str(uuid.uuid4())
             name = final_state.get("generated_schema", {}).get("name", f"tool_{tool_id[:8]}")
             desc = final_state.get("generated_schema", {}).get("description", "")
@@ -244,7 +248,7 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
                     action="Tool Registered",
                     details=f"Tool '{name}' successfully verified and added to registry."
                 )
-        else:
+        elif not final_state.get("tests_passed"):
             async with get_db() as db:
                 await RegistryRepository.add_log(
                     db,

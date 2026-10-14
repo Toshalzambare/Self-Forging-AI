@@ -29,3 +29,13 @@ class AgentState(TypedDict):
     
     # How many times have we tried to repair this code
     repair_attempts: int
+
+    # Autonomously retrieved external documentation from web search
+    documentation_context: str
+
+    # Authenticated user/tenant ID for namespace isolation
+    user_id: str
+
+    # Tool registration status & UUID in database
+    is_registered: bool
+    registered_tool_id: str

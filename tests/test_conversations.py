@@ -12,6 +12,8 @@ import os
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
+from unittest.mock import patch, AsyncMock
+from langchain_core.messages import HumanMessage, AIMessage
 from fastapi.testclient import TestClient
 from main import app
 from registry import get_db
@@ -179,23 +181,33 @@ def test_chat_auto_provisions_conversation():
     with TestClient(app) as client:
         _, headers = create_test_user(client, "chat_user")
 
-        chat_res = client.post(
-            "/api/chat",
-            headers=headers,
-            json={"message": "What is the capital of France?"}
-        )
-        assert chat_res.status_code == 200
-        data = chat_res.json()
-        assert "conversation_id" in data
-        conv_id = data["conversation_id"]
+        with patch("main.graph.ainvoke", new_callable=AsyncMock) as mock_graph:
+            mock_graph.return_value = {
+                "messages": [
+                    HumanMessage(content="What is the capital of France?"),
+                    AIMessage(content="The capital of France is Paris.")
+                ],
+                "missing_capability": None,
+                "generated_code": None,
+                "tests_passed": None
+            }
+            chat_res = client.post(
+                "/api/chat",
+                headers=headers,
+                json={"message": "What is the capital of France?"}
+            )
+            assert chat_res.status_code == 200
+            data = chat_res.json()
+            assert "conversation_id" in data
+            conv_id = data["conversation_id"]
 
-        # Fetch conversation from API to verify messages were saved
-        conv_res = client.get(f"/api/conversations/{conv_id}", headers=headers)
-        assert conv_res.status_code == 200
-        conv_data = conv_res.json()
-        assert len(conv_data["messages"]) == 2
-        assert conv_data["messages"][0]["role"] == "user"
-        assert conv_data["messages"][1]["role"] == "assistant"
+            # Fetch conversation from API to verify messages were saved
+            conv_res = client.get(f"/api/conversations/{conv_id}", headers=headers)
+            assert conv_res.status_code == 200
+            conv_data = conv_res.json()
+            assert len(conv_data["messages"]) == 2
+            assert conv_data["messages"][0]["role"] == "user"
+            assert conv_data["messages"][1]["role"] == "assistant"
 
 
 def test_chat_unknown_conversation_returns_404():
