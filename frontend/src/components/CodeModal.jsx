@@ -7,10 +7,14 @@ const CodeModal = ({ isOpen, onClose, toolName, code, showToast }) => {
   const codeContent = code || `# Autonomously forged tool definition\n# No source code stored for ${toolName || 'this tool'}.`;
   const title = toolName ? (toolName.endsWith('.py') ? toolName : `${toolName}.py`) : 'ToolScript.py';
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(codeContent);
-    showToast?.('Copied', 'Code schema copied to clipboard');
-    onClose();
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(codeContent);
+      showToast?.('Copied', 'Code schema copied to clipboard');
+      onClose();
+    } catch (err) {
+      showToast?.('Copy Failed', 'Failed to copy code to clipboard');
+    }
   };
 
   return (

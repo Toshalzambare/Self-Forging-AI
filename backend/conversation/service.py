@@ -35,12 +35,24 @@ class ConversationService:
         return conversation
 
     @staticmethod
+    def _is_valid_uuid(val: Any) -> bool:
+        """Check if a value is a valid UUID string to prevent asyncpg DataError."""
+        try:
+            uuid.UUID(str(val))
+            return True
+        except (ValueError, AttributeError, TypeError):
+            return False
+
+    @staticmethod
     async def get_conversation(
         db: AsyncSession,
         conversation_id: str,
         user_id: str,
     ) -> Optional[Conversation]:
         """Fetch a conversation and its messages, enforcing tenant isolation."""
+        if not ConversationService._is_valid_uuid(conversation_id) or not ConversationService._is_valid_uuid(user_id):
+            return None
+
         stmt = (
             select(Conversation)
             .options(selectinload(Conversation.messages))
@@ -99,6 +111,9 @@ class ConversationService:
         is_pinned: Optional[bool] = None,
     ) -> Optional[Conversation]:
         """Update conversation title or pinned status."""
+        if not ConversationService._is_valid_uuid(conversation_id) or not ConversationService._is_valid_uuid(user_id):
+            return None
+
         stmt = select(Conversation).where(
             Conversation.id == conversation_id,
             Conversation.user_id == user_id,
@@ -124,6 +139,9 @@ class ConversationService:
         user_id: str,
     ) -> bool:
         """Delete a conversation and all its cascaded messages."""
+        if not ConversationService._is_valid_uuid(conversation_id) or not ConversationService._is_valid_uuid(user_id):
+            return False
+
         stmt = select(Conversation).where(
             Conversation.id == conversation_id,
             Conversation.user_id == user_id,

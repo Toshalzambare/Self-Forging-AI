@@ -4,6 +4,7 @@ Self-Forging AI Agent - FastAPI Backend Entry Point
 
 import uuid
 import asyncio
+import logging
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse
@@ -38,6 +39,7 @@ app.include_router(conversation_router)
 
 # Build the LangGraph once at startup
 graph = None
+logger = logging.getLogger(__name__)
 
 
 @app.on_event("startup")
@@ -145,14 +147,23 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
 
     session_id = req.session_id or str(uuid.uuid4())
 
-    # Get or create persistent conversation
+    # Resolve or create persistent conversation
     async with get_db() as db:
-        conv = await ConversationService.get_or_create_conversation(
-            db,
-            user_id=str(current_user.id),
-            conversation_id=req.conversation_id,
-            initial_prompt=req.message,
-        )
+        if req.conversation_id:
+            conv = await ConversationService.get_conversation(
+                db,
+                conversation_id=req.conversation_id,
+                user_id=str(current_user.id),
+            )
+            if not conv:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+        else:
+            first_line = req.message.strip().split("\n")[0][:40] if req.message else "New Conversation"
+            conv = await ConversationService.create_conversation(
+                db,
+                user_id=str(current_user.id),
+                title=first_line or "New Conversation",
+            )
         conversation_id = str(conv.id)
 
         # 1. Persist User Message to PostgreSQL
@@ -178,14 +189,15 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
     try:
         final_state = await graph.ainvoke(initial_state)
     except Exception as e:
+        logger.exception("Agent execution failed for conversation %s: %s", conversation_id, str(e))
         async with get_db() as db:
             await ConversationService.add_message(
                 db,
                 conversation_id=conversation_id,
                 role="assistant",
-                content=f"An error occurred while executing the task: {str(e)}",
+                content="An error occurred while executing the task.",
             )
-        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
+        raise HTTPException(status_code=500, detail="An error occurred while executing the task.")
 
     messages = final_state.get("messages", [])
     # Get last assistant message

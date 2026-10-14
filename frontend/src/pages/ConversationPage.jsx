@@ -139,19 +139,22 @@ const ConversationPage = ({
               <EmptyChatStarters onSelectPrompt={(p) => !isSending && sendMessage(p)} />
             ) : (
               <>
-                {messages.map((m, idx) => {
-                  const prevUser = messages
-                    .slice(0, idx)
-                    .reverse()
-                    .find((x) => x.role === 'user');
-                  return (
-                    <ChatMessage
-                      key={m.id}
-                      message={m}
-                      onRetry={prevUser && !isSending ? () => sendMessage(prevUser.content) : undefined}
-                    />
-                  );
-                })}
+                {(() => {
+                  let lastUserPrompt = '';
+                  return messages.map((m) => {
+                    const retryTarget = lastUserPrompt;
+                    if (m.role === 'user') {
+                      lastUserPrompt = m.content || m.text || '';
+                    }
+                    return (
+                      <ChatMessage
+                        key={m.id}
+                        message={m}
+                        onRetry={retryTarget && !isSending ? () => sendMessage(retryTarget) : undefined}
+                      />
+                    );
+                  });
+                })()}
 
                 {/* Animated Forge Reasoning Banner */}
                 {activeForgeState && <ForgeStateBanner state={activeForgeState} />}

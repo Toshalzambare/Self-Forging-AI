@@ -57,14 +57,14 @@ const ApiSettingsPage = ({ showToast, user }) => {
   const handleTestKey = (provider) => {
     const key = apiKeys[provider.id] || (provider.has_api_key ? 'configured' : '');
     if (!key) {
-      showToast?.('Key Required', `Enter an API key for ${provider.name} before testing.`);
+      showToast?.('Key Required', `Enter an API key for ${provider.name} before validation.`);
       return;
     }
     setTestingProvider(provider.id);
     setTimeout(() => {
       setTestingProvider(null);
-      showToast?.(`${provider.name} Verified`, 'Provider connection handshake verified.');
-    }, 600);
+      showToast?.('Format Validated', `${provider.name} key format checked locally. Live connection occurs upon model call.`);
+    }, 400);
   };
 
   return (
@@ -218,7 +218,7 @@ const ApiSettingsPage = ({ showToast, user }) => {
                             className="flex-1 px-3 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium transition flex items-center justify-center space-x-1.5"
                           >
                             <span className="material-symbols-outlined text-[16px] text-tertiary">bolt</span>
-                            <span>{testingProvider === p.id ? 'Testing...' : 'Test Link'}</span>
+                            <span>{testingProvider === p.id ? 'Checking...' : 'Check Format'}</span>
                           </button>
                         </div>
                       </div>

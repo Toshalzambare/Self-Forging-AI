@@ -198,6 +198,20 @@ def test_chat_auto_provisions_conversation():
         assert conv_data["messages"][1]["role"] == "assistant"
 
 
+def test_chat_unknown_conversation_returns_404():
+    """Verify /api/chat returns 404 when an unknown conversation_id is supplied."""
+    with TestClient(app) as client:
+        _, headers = create_test_user(client, "chat_404_user")
+
+        chat_res = client.post(
+            "/api/chat",
+            headers=headers,
+            json={"message": "Hello non-existent conversation", "conversation_id": "non-existent-uuid"}
+        )
+        assert chat_res.status_code == 404
+        assert chat_res.json()["detail"] == "Conversation not found"
+
+
 @pytest.mark.asyncio
 async def test_registry_repository_conversation_methods():
     """Verify RegistryRepository conversation and message CRUD methods directly."""
