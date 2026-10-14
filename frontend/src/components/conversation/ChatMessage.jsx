@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import CodeArtifactCard from './CodeArtifactCard.jsx';
 import ForgeStateBanner from './ForgeStateBanner.jsx';
+import AttachmentBadge from './AttachmentBadge.jsx';
 
 const ChatMessage = ({ message, onRetry }) => {
   const [copied, setCopied] = useState(false);
@@ -82,6 +83,15 @@ const ChatMessage = ({ message, onRetry }) => {
                     Retry
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Attached Documents */}
+            {message.attachments && message.attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-slate-700/40">
+                {message.attachments.map((att, i) => (
+                  <AttachmentBadge key={att.id || i} attachment={att} />
+                ))}
               </div>
             )}
 

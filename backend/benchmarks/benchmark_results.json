@@ -1,0 +1,418 @@
+{
+  "timestamp": "2026-10-14T18:01:20.539459+00:00",
+  "total_tasks": 20,
+  "metrics": {
+    "synthesis_accuracy_pct": 100.0,
+    "ast_security_catch_rate_mode_a_pct": 100.0,
+    "ast_security_catch_rate_mode_b_pct": 0.0,
+    "regression_prevention_mode_a_pct": 100.0,
+    "regression_prevention_mode_b_pct": 0.0,
+    "avg_cold_synthesis_ms": 1751.0,
+    "avg_dual_gate_reuse_ms": 0.4,
+    "reuse_speedup_factor": "4377.5x"
+  },
+  "mode_a_results": [
+    {
+      "id": "task_01",
+      "name": "Compound Interest Calculator",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.43,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_02",
+      "name": "Standard Deviation Compute",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.4,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_03",
+      "name": "Word Frequency Tokenizer",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.28,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_04",
+      "name": "Haversine GPS Distance",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.38,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_05",
+      "name": "Markdown Table Parser",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.77,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_06",
+      "name": "HTML Injection Sanitizer",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.42,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_07",
+      "name": "Base64 Payload Validator",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.37,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_08",
+      "name": "Hex to RGB Color Converter",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.45,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_09",
+      "name": "Matrix Transpose Operator",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.35,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_10",
+      "name": "Roman Numeral Converter",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.62,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_11",
+      "name": "Syntax Error Repair",
+      "category": "repair",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.26,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_12",
+      "name": "Zero Division Guard Repair",
+      "category": "repair",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.36,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_13",
+      "name": "Type Boundary Repair",
+      "category": "repair",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.21,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_14",
+      "name": "Missing Import Repair",
+      "category": "repair",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.44,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_15",
+      "name": "Off-by-One Array Slice Repair",
+      "category": "repair",
+      "admitted": true,
+      "score": 0.92,
+      "latency_ms": 0.18,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_16",
+      "name": "OS System Payload Rejection",
+      "category": "security_regression",
+      "admitted": false,
+      "score": 0.0,
+      "latency_ms": 0.68,
+      "security_caught": true,
+      "regression_caught": false
+    },
+    {
+      "id": "task_17",
+      "name": "Eval/Exec Dynamic Injection",
+      "category": "security_regression",
+      "admitted": false,
+      "score": 0.0,
+      "latency_ms": 0.38,
+      "security_caught": true,
+      "regression_caught": false
+    },
+    {
+      "id": "task_18",
+      "name": "Socket Network Exfiltration",
+      "category": "security_regression",
+      "admitted": false,
+      "score": 0.0,
+      "latency_ms": 0.31,
+      "security_caught": true,
+      "regression_caught": false
+    },
+    {
+      "id": "task_19",
+      "name": "Schema Missing Required Parameter",
+      "category": "security_regression",
+      "admitted": false,
+      "score": 0.35,
+      "latency_ms": 0.14,
+      "security_caught": false,
+      "regression_caught": true
+    },
+    {
+      "id": "task_20",
+      "name": "Regression Test Failure Catch",
+      "category": "security_regression",
+      "admitted": false,
+      "score": 0.98,
+      "latency_ms": 0.18,
+      "security_caught": false,
+      "regression_caught": true
+    }
+  ],
+  "mode_b_results": [
+    {
+      "id": "task_01",
+      "name": "Compound Interest Calculator",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_02",
+      "name": "Standard Deviation Compute",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_03",
+      "name": "Word Frequency Tokenizer",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_04",
+      "name": "Haversine GPS Distance",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_05",
+      "name": "Markdown Table Parser",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_06",
+      "name": "HTML Injection Sanitizer",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_07",
+      "name": "Base64 Payload Validator",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_08",
+      "name": "Hex to RGB Color Converter",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_09",
+      "name": "Matrix Transpose Operator",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_10",
+      "name": "Roman Numeral Converter",
+      "category": "synthesis",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_11",
+      "name": "Syntax Error Repair",
+      "category": "repair",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_12",
+      "name": "Zero Division Guard Repair",
+      "category": "repair",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_13",
+      "name": "Type Boundary Repair",
+      "category": "repair",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_14",
+      "name": "Missing Import Repair",
+      "category": "repair",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_15",
+      "name": "Off-by-One Array Slice Repair",
+      "category": "repair",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_16",
+      "name": "OS System Payload Rejection",
+      "category": "security_regression",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_17",
+      "name": "Eval/Exec Dynamic Injection",
+      "category": "security_regression",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_18",
+      "name": "Socket Network Exfiltration",
+      "category": "security_regression",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_19",
+      "name": "Schema Missing Required Parameter",
+      "category": "security_regression",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    },
+    {
+      "id": "task_20",
+      "name": "Regression Test Failure Catch",
+      "category": "security_regression",
+      "admitted": true,
+      "score": 1.0,
+      "latency_ms": 0.5,
+      "security_caught": false,
+      "regression_caught": false
+    }
+  ]
+}

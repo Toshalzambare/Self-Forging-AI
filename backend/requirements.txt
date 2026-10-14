@@ -5,6 +5,7 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.0
 python-dotenv==1.0.1
 websockets==13.0
+pypdf==5.1.0
 
 # AI / LLM
 openai==1.109.1
@@ -21,8 +22,9 @@ asyncpg==0.29.0
 psycopg2-binary==2.9.9
 alembic==1.13.2
 
-# Object Storage (MinIO / S3)
+# Object Storage (MinIO / S3) & Document Processing
 boto3==1.35.0
+pypdf==5.1.0
 
 # Authentication, Sessions & OAuth
 bcrypt==4.2.0

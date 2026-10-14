@@ -33,6 +33,10 @@ class AgentState(TypedDict):
     # Autonomously retrieved external documentation from web search
     documentation_context: str
 
+    # Attached document contents and metadata uploaded by user
+    document_context: str
+    attachments: List[dict]
+
     # Authenticated user/tenant ID for namespace isolation
     user_id: str
 

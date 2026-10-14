@@ -12,16 +12,18 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import config
 from agents.graph import build_graph
-from registry import get_db, check_db_connection, RegistryRepository, User, dynamic_mcp_registry
+from registry import get_db, get_db_session, check_db_connection, RegistryRepository, User, dynamic_mcp_registry
 from registry.sfatool import export_sfatool_payload, validate_sfatool_payload, verify_import_security
 from auth import auth_router, get_current_user
 from auth.security import decode_access_token
 from storage import check_storage_connection
-from conversation import conversation_router, ConversationService
+from conversation import conversation_router, ConversationService, attachment_router, AttachmentService
 from observability import connection_manager, emit_agent_event, AgentLifecycleEvent
+from settings import settings_router
 
 app = FastAPI(
     title=config.APP_NAME,
@@ -37,9 +39,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount Authentication & Conversation routers
+# Mount Authentication, Conversation, Attachment & Settings routers
 app.include_router(auth_router)
 app.include_router(conversation_router)
+app.include_router(attachment_router)
+app.include_router(settings_router)
 
 # Build the LangGraph once at startup
 graph = None
@@ -178,6 +182,25 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
             content=req.message,
         )
 
+        # Retrieve any attached documents for context grounding
+        raw_attachments = await AttachmentService.list_attachments(db, conversation_id, str(current_user.id))
+        doc_blocks = []
+        att_list = []
+        remaining_budget = 32000
+        for a in raw_attachments:
+            att_list.append({
+                "id": str(a.id),
+                "filename": a.filename,
+                "content_type": a.content_type,
+                "size_bytes": a.size_bytes,
+            })
+            if remaining_budget > 0 and a.extracted_text and a.extracted_text.strip():
+                snippet = a.extracted_text.strip()[:min(8000, remaining_budget)]
+                remaining_budget -= len(snippet)
+                doc_blocks.append(f"=== ATTACHED FILE: {a.filename} ===\n{snippet}\n=== END OF FILE ===")
+
+        document_context = "\n\n".join(doc_blocks)
+
     initial_state = {
         "messages": [HumanMessage(content=req.message)],
         "task": req.message,
@@ -189,6 +212,8 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
         "tests_passed": False,
         "repair_attempts": 0,
         "documentation_context": "",
+        "document_context": document_context,
+        "attachments": att_list,
         "user_id": str(current_user.id),
         "session_id": conversation_id,
         "is_registered": False,
@@ -594,12 +619,14 @@ async def websocket_logs(
 
 
 @app.get("/api/providers")
-@app.get("/api/settings/providers")
-async def list_providers(current_user: User = Depends(get_current_user)):
-    """List configured model providers for the authenticated user."""
-    async with get_db() as db:
-        providers = await RegistryRepository.list_providers(db, user_id=str(current_user.id))
-        provider_list = [
+async def list_providers_legacy(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Legacy alias for listing model providers."""
+    providers = await RegistryRepository.list_providers(db, user_id=str(current_user.id))
+    return {
+        "providers": [
             {
                 "id": p.id,
                 "name": p.name,
@@ -610,67 +637,18 @@ async def list_providers(current_user: User = Depends(get_current_user)):
             }
             for p in providers
         ]
-        return {"providers": provider_list}
-
-
-class ProviderUpdate(BaseModel):
-    api_key: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
-@app.patch("/api/settings/providers/{provider_id}")
-async def update_provider(
-    provider_id: str,
-    req: ProviderUpdate,
-    current_user: User = Depends(get_current_user),
-):
-    """Update or save API key / active status for a model provider with tenant isolation."""
-    user_id_str = str(current_user.id)
-    async with get_db() as db:
-        provider = await RegistryRepository.get_provider(db, provider_id=provider_id, user_id=user_id_str)
-        if not provider:
-            raise HTTPException(status_code=404, detail="Provider not found")
-
-        # If this is a global provider (user_id is None), do not mutate shared row.
-        # Instead, create or update a user-scoped override row.
-        if provider.user_id is None:
-            user_override_id = f"{provider.id}_{user_id_str}"
-            user_override = await RegistryRepository.get_provider(db, provider_id=user_override_id, user_id=user_id_str)
-            if not user_override:
-                user_override = Provider(
-                    id=user_override_id,
-                    user_id=user_id_str,
-                    name=provider.name,
-                    description=provider.description,
-                    api_key=req.api_key if req.api_key is not None else provider.api_key,
-                    is_active=req.is_active if req.is_active is not None else provider.is_active,
-                )
-                db.add(user_override)
-            else:
-                if req.api_key is not None:
-                    user_override.api_key = req.api_key
-                if req.is_active is not None:
-                    user_override.is_active = req.is_active
-        else:
-            if str(provider.user_id) != user_id_str:
-                raise HTTPException(status_code=403, detail="Access denied to provider settings")
-            if req.api_key is not None:
-                provider.api_key = req.api_key
-            if req.is_active is not None:
-                provider.is_active = req.is_active
-
-        await db.commit()
-        return {"status": "success", "message": f"Settings updated for {provider.name}"}
-
+    }
 
 
 @app.get("/api/mcp-servers")
-@app.get("/api/settings/mcp_servers")
-async def list_mcp_servers(current_user: User = Depends(get_current_user)):
-    """List configured MCP servers for the authenticated user."""
-    async with get_db() as db:
-        servers = await RegistryRepository.list_mcp_servers(db, user_id=str(current_user.id))
-        server_list = [
+async def list_mcp_servers_legacy(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Legacy alias for listing MCP servers."""
+    servers = await RegistryRepository.list_mcp_servers(db, user_id=str(current_user.id))
+    return {
+        "mcp_servers": [
             {
                 "id": s.id,
                 "name": s.name,
@@ -680,4 +658,4 @@ async def list_mcp_servers(current_user: User = Depends(get_current_user)):
             }
             for s in servers
         ]
-        return {"mcp_servers": server_list}
+    }

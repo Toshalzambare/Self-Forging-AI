@@ -167,11 +167,7 @@ async def core_node(state: AgentState) -> dict:
                             )
 
                         if exec_result.get("success"):
-                            sys_prompt = SystemMessage(content="""
-You are an intelligent AI agent. An existing verified tool passed Dual-Gate re-evaluation and executed to fulfill the user's task.
-Formulate a direct, helpful, and concise final response answering the user request based on the tool's execution result.
-Include the computed result clearly.
-""")
+                            sys_prompt = SystemMessage(content="You are an intelligent AI agent. An existing verified tool passed Dual-Gate re-evaluation and executed to fulfill the user's task. Formulate a direct, helpful, and concise final response answering the user request based on the tool's execution result.")
                             user_prompt = HumanMessage(content=f"""
 User Task: {task_prompt}
 Tool Reused: {tool.name}
@@ -221,7 +217,9 @@ Return ONLY a valid JSON object with EXACTLY these three keys:
 }
 """)
 
-    response = await llm.ainvoke([sys_prompt] + messages)
+    doc_ctx = state.get("document_context")
+    doc_msgs = [SystemMessage(content=f"Context from attached user documents:\n{doc_ctx}")] if doc_ctx else []
+    response = await llm.ainvoke([sys_prompt] + doc_msgs + messages)
     content = response.content
 
     try:
@@ -234,13 +232,7 @@ Return ONLY a valid JSON object with EXACTLY these three keys:
         missing_cap = ""
         reply = f"Error parsing reasoning: {str(e)}"
 
-    if is_tool_needed:
-        return {
-            "missing_capability": missing_cap,
-            "messages": [AIMessage(content=reply)]
-        }
-    else:
-        return {
-            "missing_capability": "",
-            "messages": [AIMessage(content=reply)]
-        }
+    return {
+        "missing_capability": missing_cap if is_tool_needed else "",
+        "messages": [AIMessage(content=reply)]
+    }

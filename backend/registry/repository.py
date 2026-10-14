@@ -344,16 +344,19 @@ class RegistryRepository:
     @staticmethod
     async def seed_defaults(db: AsyncSession) -> None:
         """Seed initial providers and MCP servers if tables are empty."""
-        providers_stmt = select(Provider)
-        providers_res = await db.execute(providers_stmt)
-        if not providers_res.scalars().first():
-            default_providers = [
-                Provider(id="anthropic", name="Anthropic Claude", description="Default: Claude 3.7 Sonnet (Hybrid Reasoning)", api_key="sk-ant-...", is_active=True),
-                Provider(id="openai", name="OpenAI", description="Default: GPT-4o (Vision Analysis)", api_key="sk-proj-...", is_active=True),
-                Provider(id="ollama", name="Ollama & Local Hardware", description="Host: DeepSeek-R1-Distill", api_key="", is_active=True),
-            ]
-            for p in default_providers:
-                db.add(p)
+        default_providers = [
+            ("omniroute", "OmniRoute (Unified Gateway)", "Local routing proxy & fallback gateway", True),
+            ("openai", "OpenAI", "Default: GPT-4o, o1, o3-mini models", True),
+            ("anthropic", "Anthropic Claude", "Claude 3.7 Sonnet (Hybrid Reasoning)", True),
+            ("ollama", "Ollama Local Hardware", "Host: DeepSeek-R1-Distill / Llama 3", True),
+            ("openrouter", "OpenRouter", "Unified aggregator across 100+ LLMs", True),
+            ("deepseek", "DeepSeek API", "DeepSeek-R1 and V3 reasoning models", True),
+            ("groq", "Groq LPU", "Ultra-fast LPU inference (Llama, Mixtral)", True),
+        ]
+        for pid, name, desc, active in default_providers:
+            existing = await db.get(Provider, pid)
+            if not existing:
+                db.add(Provider(id=pid, name=name, description=desc, api_key="", is_active=active))
 
         mcp_stmt = select(McpServer)
         mcp_res = await db.execute(mcp_stmt)

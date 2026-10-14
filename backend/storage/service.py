@@ -2,9 +2,15 @@
 MinIO/S3-compatible object storage service wrapper.
 Uses boto3 with the S3 API — works identically against AWS S3 if endpoint is changed.
 """
+import io
+import logging
+import uuid
 import boto3
 from botocore.client import Config as BotoConfig
 from config import config
+from storage.extractor import extract_text_from_document
+
+logger = logging.getLogger(__name__)
 
 
 def _get_client():
@@ -35,6 +41,19 @@ def check_storage_connection() -> bool:
         return False
 
 
+def ensure_bucket_exists(bucket: str) -> None:
+    """Verify or auto-create an S3 bucket in MinIO."""
+    try:
+        client = _get_client()
+        try:
+            client.head_bucket(Bucket=bucket)
+        except Exception:
+            client.create_bucket(Bucket=bucket)
+            logger.info("Created S3 bucket '%s'", bucket)
+    except Exception as exc:
+        logger.warning("Could not verify/create bucket '%s': %s", bucket, str(exc))
+
+
 def upload_file(bucket: str, key: str, data: bytes, content_type: str = "application/octet-stream") -> str:
     """Upload bytes to MinIO. Returns the object key."""
     client = _get_client()
@@ -53,3 +72,31 @@ def delete_file(bucket: str, key: str) -> None:
     """Delete object from MinIO."""
     client = _get_client()
     client.delete_object(Bucket=bucket, Key=key)
+
+
+def upload_document(
+    user_id: str,
+    conversation_id: str,
+    filename: str,
+    data: bytes,
+    content_type: str = "application/octet-stream"
+) -> tuple[str, str]:
+    """
+    Extracts text from document, uploads bytes to MinIO S3 bucket,
+    and returns tuple of (s3_key, extracted_text).
+    """
+    bucket = config.MINIO_BUCKET_DOCS
+    ensure_bucket_exists(bucket)
+
+    doc_id = uuid.uuid4().hex[:12]
+    safe_filename = filename.replace("/", "_").replace("\\", "_")
+    s3_key = f"{user_id}/{conversation_id}/{doc_id}_{safe_filename}"
+
+    # Extract text from content
+    extracted_text = extract_text_from_document(filename, data, content_type)
+
+    # Upload to MinIO
+    upload_file(bucket=bucket, key=s3_key, data=data, content_type=content_type)
+    logger.info("Uploaded document '%s' to S3 key '%s' (%d bytes)", filename, s3_key, len(data))
+
+    return s3_key, extracted_text

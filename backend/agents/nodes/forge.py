@@ -58,6 +58,9 @@ Return ONLY a valid JSON object with EXACTLY these two keys:
     user_content = f"Please forge a tool for the following capability:\n{capability}"
     if doc_context:
         user_content += f"\n\n{doc_context}"
+    user_doc_context = state.get("document_context")
+    if user_doc_context:
+        user_content += f"\n\nAttached user document context:\n{user_doc_context}"
 
     user_prompt = HumanMessage(content=user_content)
     

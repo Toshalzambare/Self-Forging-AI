@@ -6,6 +6,7 @@ import ChatInput from '../components/conversation/ChatInput.jsx';
 import EmptyChatStarters from '../components/conversation/EmptyChatStarters.jsx';
 import ForgeStateBanner from '../components/conversation/ForgeStateBanner.jsx';
 import { useConversationManager } from '../components/conversation/useConversationManager.js';
+import { useConversationAttachments } from '../components/conversation/useConversationAttachments.js';
 
 const ConversationPage = ({
   selectedModel,
@@ -35,14 +36,21 @@ const ConversationPage = ({
     sendMessage,
   } = useConversationManager(showToast);
 
+  const {
+    attachments,
+    isUploading: isUploadingAttachment,
+    uploadAttachment,
+    removeAttachment,
+  } = useConversationAttachments(activeId, showToast, createConversation);
+
   // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, activeForgeState]);
 
   const handleSend = () => {
-    if (!inputText.trim() || isSending) return;
-    const text = inputText;
+    if ((!inputText.trim() && !attachments.length) || isSending || isUploadingAttachment) return;
+    const text = inputText.trim() || 'Please analyze the attached document(s) and assist with the data.';
     setInputText('');
     sendMessage(text);
   };
@@ -191,6 +199,10 @@ const ConversationPage = ({
                   ? 'Backend offline — ensure backend server is running'
                   : 'Ask anything or describe a capability to autonomously forge...'
               }
+              attachments={attachments}
+              onUploadFile={uploadAttachment}
+              onRemoveAttachment={removeAttachment}
+              isUploading={isUploadingAttachment}
             />
           </div>
         </div>
