@@ -51,8 +51,16 @@ const ConversationItem = ({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={() => !isEditing && onSelect(conversation.id)}
-      className={`group relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition-all text-xs font-medium ${
+      onKeyDown={(e) => {
+        if (!isEditing && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onSelect(conversation.id);
+        }
+      }}
+      className={`group relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition-all text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500/50 ${
         isSelected
           ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
@@ -146,4 +154,12 @@ const ConversationItem = ({
   );
 };
 
-export default ConversationItem;
+export default React.memo(ConversationItem, (prevProps, nextProps) => {
+  return (
+    prevProps.conversation.id === nextProps.conversation.id &&
+    prevProps.conversation.title === nextProps.conversation.title &&
+    prevProps.conversation.is_pinned === nextProps.conversation.is_pinned &&
+    prevProps.conversation.updated_at === nextProps.conversation.updated_at &&
+    prevProps.isSelected === nextProps.isSelected
+  );
+});

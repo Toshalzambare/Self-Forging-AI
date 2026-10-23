@@ -126,11 +126,12 @@ class HybridToolSearcher:
         if not isinstance(schema, dict):
             return 0.5
 
+        params = schema.get("parameters") if isinstance(schema.get("parameters"), dict) else {}
         properties = (
             schema.get("properties")
-            or schema.get("parameters", {}).get("properties")
-            or {}
-        )
+            if isinstance(schema.get("properties"), dict)
+            else (params.get("properties") if isinstance(params.get("properties"), dict) else {})
+        ) or {}
 
         if not properties:
             # Zero-parameter tool is compatible with short or direct prompts
@@ -160,12 +161,9 @@ class HybridToolSearcher:
         base_score = gate_score if (gate_score and gate_score > 0.0) else 0.8
         count = max(reuse_count, 0)
 
-        if count == 0:
-            # New tool with verified gate pass gets an optimistic prior (0.75 of base)
-            return min(max(base_score * 0.75, 0.0), 1.0)
-
+        # reliability is 0.0 at count == 0 and grows monotonically toward 1.0
         reliability = 1.0 - (1.0 / (1.0 + math.log(1.0 + count)))
-        perf_score = base_score * (0.5 + 0.5 * reliability)
+        perf_score = base_score * (0.75 + 0.25 * reliability)
         return min(max(perf_score, 0.0), 1.0)
 
     @classmethod

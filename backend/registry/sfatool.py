@@ -63,6 +63,10 @@ def validate_sfatool_payload(data: Any) -> Tuple[bool, str, Dict[str, Any]]:
     schema = data.get("schema")
     if schema is None or not isinstance(schema, dict):
         return False, "Tool 'schema' must be a JSON Schema object.", {}
+    if "parameters" in schema and schema["parameters"] is not None and not isinstance(schema["parameters"], dict):
+        return False, "Tool 'schema.parameters' must be an object or omitted.", {}
+    if "properties" in schema and schema["properties"] is not None and not isinstance(schema["properties"], dict):
+        return False, "Tool 'schema.properties' must be an object or omitted.", {}
 
     tests = data.get("tests")
     if tests is None:

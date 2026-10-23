@@ -6,6 +6,7 @@ Tests:
 - register_node persistence to PostgreSQL and automatic hot-swap into in-memory MCP registry
 """
 import pytest
+import pytest_asyncio
 import os
 import sys
 import uuid
@@ -19,7 +20,7 @@ from registry.mcp_manager import DynamicMcpRegistry, dynamic_mcp_registry
 from agents.nodes.register import register_node, _infer_tool_name
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def cleanup():
     """Clear in-memory MCP registry between test runs."""
     dynamic_mcp_registry.clear()

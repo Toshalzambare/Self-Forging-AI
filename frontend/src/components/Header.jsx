@@ -80,7 +80,7 @@ const Header = ({ onOpenModelModal, onToggleLogsDrawer, selectedModel, user, onL
               title="Switch model"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-              <span className="font-medium hidden sm:inline max-w-[90px] truncate">{selectedModel}</span>
+              <span className="font-medium hidden sm:inline max-w-[140px] truncate">{selectedModel}</span>
               <span className="material-symbols-outlined text-[14px] text-outline">unfold_more</span>
             </button>
 

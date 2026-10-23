@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request, WebSocket, WebSock
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import config
@@ -50,9 +50,12 @@ graph = None
 logger = logging.getLogger(__name__)
 
 
+is_migration_ready: bool = False
+
+
 @app.on_event("startup")
 async def startup():
-    global graph
+    global graph, is_migration_ready
     warnings = config.validate()
     if warnings:
         for w in warnings:
@@ -70,8 +73,10 @@ async def startup():
         ini_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alembic.ini")
         alembic_cfg = AlembicConfig(ini_path)
         await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
+        is_migration_ready = True
         print("Database migrations applied successfully.")
     except Exception as e:
+        is_migration_ready = False
         print(f"Alembic startup migration note: {e}")
 
     # Seed default providers and MCP servers in PostgreSQL if empty
@@ -94,6 +99,7 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
     conversation_id: Optional[str] = None
+    model: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -105,6 +111,7 @@ class ChatResponse(BaseModel):
     tests_passed: Optional[bool] = None
     repair_attempts: Optional[int] = None
     is_tool_forged: bool = False
+    forge_data: Optional[dict] = None
 
 
 # ============================================================
@@ -118,16 +125,16 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "graph_ready": graph is not None}
+    return {"status": "healthy" if is_migration_ready else "degraded", "graph_ready": graph is not None and is_migration_ready}
 
 
 @app.get("/api/health")
 async def health_check():
-    """Combined health check for DB and storage."""
+    """Combined health check for DB, storage, and migration readiness."""
     db_ok = await check_db_connection()
     storage_ok = await asyncio.to_thread(check_storage_connection)
 
-    overall = "ok" if db_ok and storage_ok else "degraded"
+    overall = "ok" if db_ok and storage_ok and is_migration_ready else "degraded"
     status_code = 200 if overall == "ok" else 503
 
     return JSONResponse(
@@ -136,6 +143,7 @@ async def health_check():
             "status": overall,
             "db": "connected" if db_ok else "error",
             "storage": "connected" if storage_ok else "error",
+            "migration_ready": is_migration_ready,
         }
     )
 
@@ -201,9 +209,31 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
 
         document_context = "\n\n".join(doc_blocks)
 
+        # Load prior conversation history so the agent maintains multi-turn context
+        history_messages = []
+        if req.conversation_id:
+            from registry.models import Message
+            from sqlalchemy import select
+            stmt_msgs = (
+                select(Message)
+                .where(Message.conversation_id == conversation_id)
+                .order_by(Message.created_at.desc())
+                .limit(20)
+            )
+            res_msgs = await db.execute(stmt_msgs)
+            prior_msgs = list(reversed(res_msgs.scalars().all()))
+            for m in prior_msgs:
+                if m.role == "assistant":
+                    history_messages.append(AIMessage(content=m.content))
+                elif m.role == "user":
+                    history_messages.append(HumanMessage(content=m.content))
+        if not history_messages:
+            history_messages = [HumanMessage(content=req.message)]
+
     initial_state = {
-        "messages": [HumanMessage(content=req.message)],
+        "messages": history_messages,
         "task": req.message,
+        "model": (req.model or "").strip(),
         "missing_capability": "",
         "generated_code": "",
         "generated_schema": {},
@@ -255,29 +285,9 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
             "tests": final_state.get("adversarial_tests", ""),
         }
 
-        # Save to PostgreSQL registry if tests passed and not already registered by graph
+        # Log if verified tool was not registered by register_node
         if final_state.get("tests_passed") and not final_state.get("is_registered"):
-            tool_id = str(uuid.uuid4())
-            name = final_state.get("generated_schema", {}).get("name", f"tool_{tool_id[:8]}")
-            desc = final_state.get("generated_schema", {}).get("description", "")
-            async with get_db() as db:
-                await RegistryRepository.add_tool(
-                    db,
-                    tool_id=tool_id,
-                    user_id=str(current_user.id),
-                    name=name,
-                    description=desc,
-                    code=forged_tool["code"],
-                    schema=forged_tool["schema"],
-                    tests_code=forged_tool.get("tests", "")
-                )
-                await RegistryRepository.add_log(
-                    db,
-                    user_id=str(current_user.id),
-                    session_id=conversation_id,
-                    action="Tool Registered",
-                    details=f"Tool '{name}' successfully verified and added to registry."
-                )
+            logger.warning("Verified tool was not registered for conversation %s", conversation_id)
         elif not final_state.get("tests_passed"):
             async with get_db() as db:
                 await RegistryRepository.add_log(
@@ -299,20 +309,28 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
             )
 
     # 2. Persist Assistant Reply to PostgreSQL
+    node_forge_data = {}
+    for m in reversed(messages):
+        if getattr(m, "type", None) == "ai":
+            node_forge_data = (getattr(m, "additional_kwargs", {}) or {}).get("forge_data") or {}
+            break
+
     forge_meta = {
+        **node_forge_data,
         "is_tool_forged": is_tool_forged,
         "forged_tool": forged_tool,
         "sandbox_results": final_state.get("sandbox_results"),
         "tests_passed": final_state.get("tests_passed"),
         "repair_attempts": final_state.get("repair_attempts"),
     }
+    has_forge_meta = bool(is_tool_forged or node_forge_data)
     async with get_db() as db:
         await ConversationService.add_message(
             db,
             conversation_id=conversation_id,
             role="assistant",
             content=reply,
-            forge_data=forge_meta if is_tool_forged else None,
+            forge_data=forge_meta if has_forge_meta else None,
         )
 
     return ChatResponse(
@@ -324,6 +342,7 @@ async def chat(req: ChatRequest, current_user: User = Depends(get_current_user))
         tests_passed=final_state.get("tests_passed"),
         repair_attempts=final_state.get("repair_attempts"),
         is_tool_forged=is_tool_forged,
+        forge_data=forge_meta if has_forge_meta else None,
     )
 
 
@@ -482,7 +501,10 @@ async def import_tool(
         if any(t.name.lower() == target_name.lower() for t in existing_tools):
             target_name = f"{target_name}_imported_{uuid.uuid4().hex[:6]}"
 
-        # 4. Save into PostgreSQL
+        # 4. Save into PostgreSQL with status reflecting test presence
+        has_tests = bool(cleaned["tests"] and cleaned["tests"].strip())
+        tool_status = "active" if has_tests else "untested"
+
         imported_tool = await RegistryRepository.add_tool(
             db,
             name=target_name,
@@ -491,7 +513,7 @@ async def import_tool(
             schema=cleaned["schema"],
             tests_code=cleaned["tests"],
             user_id=str(current_user.id),
-            status="active",
+            status=tool_status,
         )
         tool_data = {
             "id": str(imported_tool.id),
@@ -502,14 +524,22 @@ async def import_tool(
             "status": imported_tool.status,
         }
 
-    # 5. Hot-swap into dynamic MCP registry after successful DB transaction commit
-    dynamic_mcp_registry.register_dynamic_tool(
-        user_id=str(current_user.id),
-        tool_id=tool_data["id"],
-        name=tool_data["name"],
-        code=tool_data["code"],
-        schema=tool_data["schema_json"] or {},
-    )
+    # 5. Hot-swap into dynamic MCP registry only if active (has regression test suite)
+    if tool_status == "active":
+        hot_swapped = dynamic_mcp_registry.register_dynamic_tool(
+            user_id=str(current_user.id),
+            tool_id=tool_data["id"],
+            name=tool_data["name"],
+            code=tool_data["code"],
+            schema=tool_data["schema_json"] or {},
+        )
+        if not hot_swapped:
+            async with get_db() as db:
+                await RegistryRepository.delete_tool(db, tool_data["id"], str(current_user.id))
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tool '{tool_data['name']}' could not be loaded into runtime MCP registry: compilation or execution failed.",
+            )
 
     return {
         "status": "success",
@@ -526,7 +556,7 @@ async def import_tool(
 
 @app.post("/api/tools/{tool_id}/test")
 async def test_tool(tool_id: str, current_user: User = Depends(get_current_user)):
-    """Test and verify a registered tool's syntax and AST execution readiness."""
+    """Test and verify a registered tool in the Docker sandbox regression suite."""
     import ast
     async with get_db() as db:
         tool = await RegistryRepository.get_tool(db, tool_id=tool_id)
@@ -534,15 +564,37 @@ async def test_tool(tool_id: str, current_user: User = Depends(get_current_user)
             raise HTTPException(status_code=404, detail="Tool not found or access denied")
         try:
             ast.parse(tool.code or "")
-            return {
-                "status": "passed",
-                "message": f"Syntax and AST validation verified for {tool.name}. Function ready for sandbox execution.",
-            }
         except SyntaxError as exc:
             return {
                 "status": "failed",
                 "message": f"Tool syntax validation error: {str(exc)}",
             }
+
+        from agents.evaluation.gate_two import evaluate_regression
+        if tool.tests_code and tool.tests_code.strip():
+            passed, logs = await asyncio.to_thread(evaluate_regression, tool)
+            if passed is True:
+                return {
+                    "status": "passed",
+                    "message": f"Sandbox regression tests passed for {tool.name}.",
+                    "logs": logs,
+                }
+            elif passed is False:
+                return {
+                    "status": "failed",
+                    "message": f"Sandbox regression tests failed for {tool.name}.",
+                    "logs": logs,
+                }
+            else:
+                return {
+                    "status": "syntax_only",
+                    "message": f"Syntax verified for {tool.name}, but sandbox was unavailable: {logs}",
+                }
+
+        return {
+            "status": "passed",
+            "message": f"Syntax and AST validation verified for {tool.name}. Note: tool has no stored regression tests.",
+        }
 
 
 
@@ -598,6 +650,19 @@ async def websocket_logs(
         await websocket.accept()
         await websocket.close(code=4003, reason="Unauthorized or invalid token")
         return
+
+    async with get_db() as db:
+        user = await RegistryRepository.get_user_by_id(db, user_id)
+        token_iat = payload.get("iat")
+        is_revoked = False
+        if token_iat and user and user.updated_at:
+            if token_iat < int(user.updated_at.timestamp()):
+                is_revoked = True
+
+        if not user or not user.is_active or is_revoked:
+            await websocket.accept()
+            await websocket.close(code=4003, reason="User deactivated or token revoked")
+            return
 
     await connection_manager.connect(user_id, websocket)
     try:

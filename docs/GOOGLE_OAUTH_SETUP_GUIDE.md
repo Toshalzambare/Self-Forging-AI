@@ -80,8 +80,8 @@ Before creating OAuth credentials, Google requires configuring the consent scree
    Click **"+ ADD URI"** and add:
    ```text
    http://localhost:5173
-   http://localhost:8000/api/auth/google/callback
    ```
+   *(Note: The Google Identity Services popup flow posts credentials directly to `/api/auth/google`, so no backend redirect callback URL is required).*
 
 6. Click **"CREATE"**.
 7. A modal will pop up with:
@@ -94,19 +94,22 @@ Before creating OAuth credentials, Google requires configuring the consent scree
 ## Step 4: Configure Project Environment Variables
 
 ### 1. Backend Configuration
-Open the root `.env` file (and `.env.example`) and add your credentials:
+Open the root `.env` file (never commit real values to `.env.example`; keep it as a placeholder template) and add your credentials:
 
 ```bash
 # Google OAuth 2.0 Credentials
 GOOGLE_CLIENT_ID=1234567890-abcdef123456.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx
 
-# Development mock Google sign-in (only set to true in local testing; must be false in production)
-ALLOW_MOCK_GOOGLE_AUTH=true
+# Set to false when using real Google credentials. Mock auth is strictly disallowed outside development.
+ALLOW_MOCK_GOOGLE_AUTH=false
+
+# Environment mode: always set ENVIRONMENT=production in staging and production to enforce strict security
+ENVIRONMENT=development
 ```
 
 ### 2. Frontend Configuration
-In `frontend/.env` (or `frontend/.env.example`):
+In `frontend/.env` (keep `frontend/.env.example` as a placeholder template):
 
 ```bash
 VITE_GOOGLE_CLIENT_ID=1234567890-abcdef123456.apps.googleusercontent.com
@@ -133,4 +136,4 @@ VITE_GOOGLE_CLIENT_ID=1234567890-abcdef123456.apps.googleusercontent.com
 | **`Error 400: origin_mismatch`** | The URL you opened in the browser does not match the **Authorized JavaScript origins**. | If opening `http://localhost:5173`, make sure `http://localhost:5173` is added (exact match, no trailing slash). |
 | **`Error 403: access_denied`** | The Google account you're testing with is not listed under **Test Users**. | Go to **OAuth consent screen > Test users**, add your email address, and retry. |
 | **`Invalid Google credential` (Backend 401)** | `GOOGLE_CLIENT_ID` in `.env` does not match the Client ID used by the frontend. | Ensure `GOOGLE_CLIENT_ID` in backend `.env` matches `VITE_GOOGLE_CLIENT_ID` in frontend `.env`. |
-| **Working Offline / Without GCP Credentials** | You don't have Google Cloud credentials yet. | Set `ALLOW_MOCK_GOOGLE_AUTH=true` in `.env`. In dev mode (`npm run dev`), the frontend will display a quick dev demo button that logs in immediately without calling GCP servers. |
+| **Working Offline / Without GCP Credentials** | You don't have Google Cloud credentials yet. | Set `ALLOW_MOCK_GOOGLE_AUTH=true` and `ENVIRONMENT=development` in `.env`. In dev mode (`npm run dev`), the frontend will display a quick dev demo button that logs in immediately without calling GCP servers. |

@@ -136,12 +136,21 @@ class RegistryRepository:
         old_session: UserSession,
         new_refresh_token: str,
         expires_in_days: int = 7,
-    ) -> UserSession:
-        # Revoke old session
-        old_session.is_revoked = True
-        
-        # Create new session
+    ) -> Optional[UserSession]:
+        """
+        Atomically consume the old session and create a rotated successor session.
+        Returns None if old_session was already revoked by a concurrent request.
+        """
         now = datetime.now(timezone.utc)
+        stmt = (
+            update(UserSession)
+            .where(UserSession.id == old_session.id, UserSession.is_revoked == False)
+            .values(is_revoked=True, last_used_at=now)
+        )
+        res = await db.execute(stmt)
+        if res.rowcount == 0:
+            return None
+
         new_session = UserSession(
             id=str(uuid.uuid4()),
             user_id=old_session.user_id,
@@ -229,6 +238,10 @@ class RegistryRepository:
 
     @staticmethod
     async def get_tool(db: AsyncSession, tool_id: str) -> Optional[Tool]:
+        try:
+            uuid.UUID(str(tool_id))
+        except (ValueError, TypeError, AttributeError):
+            return None
         result = await db.execute(select(Tool).where(Tool.id == tool_id))
         return result.scalar_one_or_none()
 
@@ -240,9 +253,7 @@ class RegistryRepository:
         status: str,
     ) -> Optional[Tool]:
         """Update tool status with strict tenant ownership check."""
-        stmt = select(Tool).where(Tool.id == tool_id)
-        res = await db.execute(stmt)
-        tool = res.scalar_one_or_none()
+        tool = await RegistryRepository.get_tool(db, tool_id)
         if not tool:
             return None
         # Enforce tenant ownership: cannot modify other user's tools or global system tools
@@ -259,9 +270,7 @@ class RegistryRepository:
         user_id: str,
     ) -> bool:
         """Delete tool with strict tenant ownership check."""
-        stmt = select(Tool).where(Tool.id == tool_id)
-        res = await db.execute(stmt)
-        tool = res.scalar_one_or_none()
+        tool = await RegistryRepository.get_tool(db, tool_id)
         if not tool:
             return False
         # Enforce tenant ownership: cannot delete other user's tools or global system tools
@@ -319,7 +328,12 @@ class RegistryRepository:
         if user_id:
             stmt = stmt.where(or_(Provider.user_id == user_id, Provider.user_id.is_(None)))
         result = await db.execute(stmt)
-        return list(result.scalars().all())
+        all_providers = list(result.scalars().all())
+        if not user_id:
+            return all_providers
+
+        user_override_names = {p.name.lower() for p in all_providers if p.user_id == user_id}
+        return [p for p in all_providers if p.user_id == user_id or p.name.lower() not in user_override_names]
 
     @staticmethod
     async def get_provider(db: AsyncSession, provider_id: str, user_id: str | None = None) -> Optional[Provider]:

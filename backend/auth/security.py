@@ -33,8 +33,17 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
+DEFAULT_JWT_SECRETS = {
+    "sfa_jwt_dev_secret_change_in_production_key_128bit",
+    "generate_a_random_32_char_secret_key_here",
+}
+
+
 def create_access_token(user_id: str, email: str, expires_delta: Optional[timedelta] = None) -> str:
     """Create a signed JWT access token with user_id and expiration."""
+    if config.ENVIRONMENT in ("production", "staging") and config.JWT_SECRET_KEY in DEFAULT_JWT_SECRETS:
+        raise RuntimeError("Security error: refusing to issue access tokens with default dev secret in production/staging.")
+
     now = datetime.now(timezone.utc)
     if expires_delta:
         expire = now + expires_delta

@@ -25,7 +25,6 @@ const ActivityLogsPage = ({ showToast }) => {
     try {
       const params = new URLSearchParams();
       if (sessionIdFilter) params.set('session_id', sessionIdFilter);
-      if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
       params.set('limit', '100');
 
       const data = await apiFetch(`/api/logs?${params.toString()}`);
@@ -35,7 +34,7 @@ const ActivityLogsPage = ({ showToast }) => {
     } finally {
       setLoading(false);
     }
-  }, [sessionIdFilter, statusFilter, showToast]);
+  }, [sessionIdFilter, showToast]);
 
   useEffect(() => {
     fetchLogs();
@@ -66,6 +65,16 @@ const ActivityLogsPage = ({ showToast }) => {
     });
     return res;
   }, [logs]);
+
+  const visibleLogs = useMemo(() => {
+    if (!statusFilter || statusFilter === 'all') return logs;
+    return logs.filter((l) => {
+      const s = (l.status || '').toLowerCase();
+      if (statusFilter === 'success') return s === 'success' || s === 'passed';
+      if (statusFilter === 'failed') return s === 'failed' || s === 'error';
+      return s === statusFilter.toLowerCase();
+    });
+  }, [logs, statusFilter]);
 
   return (
     <main className="pt-20 min-h-screen bg-surface px-4 sm:px-6 py-6 max-w-7xl mx-auto w-full pb-16">
@@ -115,7 +124,7 @@ const ActivityLogsPage = ({ showToast }) => {
             <span className="material-symbols-outlined text-[28px] animate-spin text-primary">sync</span>
             <span className="text-xs">Loading activity audit logs...</span>
           </div>
-        ) : logs.length === 0 ? (
+        ) : visibleLogs.length === 0 ? (
           <div className="text-center py-16 px-4 rounded-2xl bg-surface-container-low border border-outline-variant/20 flex flex-col items-center justify-center space-y-3">
             <div className="w-12 h-12 rounded-xl bg-primary-container/20 text-primary flex items-center justify-center">
               <span className="material-symbols-outlined text-[28px]">history</span>
@@ -128,7 +137,7 @@ const ActivityLogsPage = ({ showToast }) => {
             </p>
           </div>
         ) : (
-          logs.map((log) => {
+          visibleLogs.map((log) => {
             const isError = log.status === 'error' || log.status === 'failed' || log.status === 'security_violation';
             let summary = log.details || '';
             try {

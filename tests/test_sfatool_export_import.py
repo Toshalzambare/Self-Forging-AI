@@ -10,6 +10,7 @@ Tests:
 - Format validation (missing required keys, invalid Python syntax)
 """
 import pytest
+import pytest_asyncio
 import os
 import sys
 import uuid
@@ -25,7 +26,7 @@ from registry.mcp_manager import dynamic_mcp_registry
 from auth import create_access_token
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def cleanup():
     dynamic_mcp_registry.clear()
     yield

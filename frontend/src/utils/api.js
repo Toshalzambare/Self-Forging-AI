@@ -13,27 +13,12 @@ export const USER_KEY = 'sfa_user';
 let isRefreshing = false;
 let refreshSubscribers = [];
 
-function subscribeTokenRefresh(cb) {
-  refreshSubscribers.push(cb);
-}
+const subscribeTokenRefresh = (cb) => refreshSubscribers.push(cb);
+const onRefreshed = (newToken) => { refreshSubscribers.forEach(cb => cb(newToken)); refreshSubscribers = []; };
+const onRefreshFailed = (err) => { refreshSubscribers.forEach(cb => cb(null, err)); refreshSubscribers = []; };
 
-function onRefreshed(newToken) {
-  refreshSubscribers.forEach(cb => cb(newToken));
-  refreshSubscribers = [];
-}
-
-function onRefreshFailed(err) {
-  refreshSubscribers.forEach(cb => cb(null, err));
-  refreshSubscribers = [];
-}
-
-export function getAccessToken() {
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
-}
-
-export function getRefreshToken() {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
-}
+export function getAccessToken() { return localStorage.getItem(ACCESS_TOKEN_KEY); }
+export function getRefreshToken() { return localStorage.getItem(REFRESH_TOKEN_KEY); }
 
 export function getStoredUser() {
   try {
@@ -62,31 +47,53 @@ export function isAuthenticated() {
 
 /**
  * Attempts to rotate the refresh token and acquire a new access token.
+ * Coordinates token rotation across browser tabs using navigator.locks.
  */
 export async function refreshTokens() {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) {
+  const initialRefresh = getRefreshToken();
+  if (!initialRefresh) {
     clearSession();
     window.dispatchEvent(new CustomEvent('sfa-auth-expired'));
     throw new Error('No refresh token available');
   }
 
-  const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
+  const executeRefresh = async () => {
+    // If another tab already rotated the token while waiting, use the fresh token
+    const currentRefresh = getRefreshToken();
+    const currentAccess = getAccessToken();
+    if (currentRefresh && currentRefresh !== initialRefresh && currentAccess) {
+      return currentAccess;
+    }
 
-  if (!res.ok) {
-    clearSession();
-    window.dispatchEvent(new CustomEvent('sfa-auth-expired'));
-    throw new Error('Session expired or revoked');
+    const targetRefresh = currentRefresh || initialRefresh;
+    const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: targetRefresh }),
+    });
+
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        clearSession();
+        window.dispatchEvent(new CustomEvent('sfa-auth-expired'));
+        throw new Error('Session expired or revoked');
+      }
+      throw new Error(`Token refresh failed (HTTP ${res.status})`);
+    }
+
+    const data = await res.json();
+    if (localStorage.getItem(REFRESH_TOKEN_KEY) !== targetRefresh) {
+      return data.token;
+    }
+    localStorage.setItem(ACCESS_TOKEN_KEY, data.token);
+    localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+    return data.token;
+  };
+
+  if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+    return await navigator.locks.request('sfa_token_refresh', executeRefresh);
   }
-
-  const data = await res.json();
-  localStorage.setItem(ACCESS_TOKEN_KEY, data.token);
-  localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
-  return data.token;
+  return await executeRefresh();
 }
 
 /**
@@ -96,10 +103,10 @@ export async function apiFetch(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
   const token = getAccessToken();
 
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
+  const headers = { ...options.headers };
+  if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -159,7 +166,9 @@ export async function apiFetch(path, options = {}) {
     throw new Error(detail);
   }
 
-  return res.json();
+  if (res.status === 204) return null;
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 // ── Auth API Helpers ───────────────────────────────────────────────────────────
@@ -217,6 +226,7 @@ export async function authGoogle(credential) {
 
 export async function authLogout() {
   const refreshToken = getRefreshToken();
+  clearSession();
   if (refreshToken) {
     try {
       await fetch(`${API_BASE_URL}/api/auth/logout`, {
@@ -226,7 +236,6 @@ export async function authLogout() {
       });
     } catch (_) {}
   }
-  clearSession();
 }
 
 export async function authGetMe() {

@@ -7,6 +7,7 @@ Tests:
 - core_node seamless tool reuse without unnecessary re-forging
 """
 import pytest
+import pytest_asyncio
 import os
 import sys
 import uuid
@@ -23,7 +24,7 @@ from agents.nodes.core import core_node
 from langchain_core.messages import AIMessage, HumanMessage
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def cleanup():
     dynamic_mcp_registry.clear()
     yield
@@ -76,11 +77,13 @@ def test_struct_score_evaluation():
 def test_perf_score_bayesian_growth():
     """Verify performance prior increases monotonically with validated reuse count."""
     p_zero = HybridToolSearcher.compute_perf_score(gate_score=1.0, reuse_count=0)
+    p_one = HybridToolSearcher.compute_perf_score(gate_score=1.0, reuse_count=1)
     p_low = HybridToolSearcher.compute_perf_score(gate_score=1.0, reuse_count=2)
     p_high = HybridToolSearcher.compute_perf_score(gate_score=1.0, reuse_count=20)
 
     assert 0.0 < p_zero <= 0.8
-    assert p_low > p_zero
+    assert p_one > p_zero
+    assert p_low > p_one
     assert p_high > p_low
     assert p_high <= 1.0
 
@@ -208,6 +211,7 @@ async def test_core_node_reuses_existing_tool_without_forging():
             description="Reverses any input string text",
             code="def execute(text: str) -> str: return text[::-1]",
             schema={"properties": {"text": {"type": "string"}}},
+            tests_code="from generated_tool import execute\ndef test_rev(): assert execute('Antigravity') == 'ytivargitnA'",
             user_id=user_id,
         )
 

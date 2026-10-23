@@ -52,6 +52,12 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_user_sessions_refresh_token_hash'), 'user_sessions', ['refresh_token_hash'], unique=True)
     op.create_index(op.f('ix_user_sessions_user_id'), 'user_sessions', ['user_id'], unique=False)
+
+    # Legacy owners have no matching users row. Never promote their rows to global (user_id IS NULL).
+    # Owned rows are removed; a backfill can replace this step if legacy owners must be preserved.
+    for table in ('activity_logs', 'mcp_servers', 'providers', 'tools'):
+        op.execute(f"DELETE FROM {table} WHERE user_id IS NOT NULL")
+
     op.alter_column('activity_logs', 'user_id',
                existing_type=sa.VARCHAR(length=255),
                type_=sa.UUID(as_uuid=False),

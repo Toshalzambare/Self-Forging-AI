@@ -22,8 +22,12 @@ def verify_google_credential(credential: str) -> Optional[Dict[str, Any]]:
         return None
 
     try:
-        # Development & testing mock token support (explicit opt-in only)
-        if config.ALLOW_MOCK_GOOGLE_AUTH and credential.startswith("mock-google-token-"):
+        # Development & testing mock token support (explicit opt-in only in development)
+        if (
+            config.ALLOW_MOCK_GOOGLE_AUTH
+            and config.ENVIRONMENT == "development"
+            and credential.startswith("mock-google-token-")
+        ):
             email = credential.replace("mock-google-token-", "").strip().lower()
             import re
             if not email or not re.match(r"^[\w\.\-]+@[\w\.\-]+\.[a-zA-Z]{2,}$", email):

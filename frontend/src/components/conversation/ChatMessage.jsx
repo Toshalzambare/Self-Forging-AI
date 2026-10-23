@@ -2,9 +2,13 @@ import React, { useState } from 'react';
 import CodeArtifactCard from './CodeArtifactCard.jsx';
 import ForgeStateBanner from './ForgeStateBanner.jsx';
 import AttachmentBadge from './AttachmentBadge.jsx';
+import ThinkingBlock from './ThinkingBlock.jsx';
+import CitationModal from './CitationModal.jsx';
+import { renderContentWithCitations } from './citationParser.jsx';
 
 const ChatMessage = ({ message, onRetry }) => {
   const [copied, setCopied] = useState(false);
+  const [selectedCitation, setSelectedCitation] = useState(null);
   const isUser = message.role === 'user';
   const isLoading = message.isLoading;
 
@@ -56,7 +60,16 @@ const ChatMessage = ({ message, onRetry }) => {
                 : 'bg-slate-900/90 text-slate-200 border border-slate-800 rounded-tl-sm shadow-xl backdrop-blur-md'
             }`}
           >
-            {isLoading ? (
+            {/* Collapsible Agent Thinking Process */}
+            {!isUser && (message.thinking || message.isThinking) && (
+              <ThinkingBlock
+                thinking={message.thinking}
+                isThinking={message.isThinking}
+                durationMs={message.thinkingDurationMs}
+              />
+            )}
+
+            {isLoading && !message.content ? (
               <div className="flex items-center space-x-2 text-slate-400 py-1">
                 <span className="material-symbols-outlined text-[18px] animate-spin text-indigo-400">
                   sync
@@ -65,7 +78,13 @@ const ChatMessage = ({ message, onRetry }) => {
               </div>
             ) : (
               <div className="whitespace-pre-wrap break-words">
-                {message.content || message.text}
+                {renderContentWithCitations(message.content || message.text, setSelectedCitation)}
+                {message.isStreaming && (
+                  <span
+                    className="inline-block w-1.5 h-4 ml-1 align-middle bg-indigo-400 animate-pulse rounded-sm"
+                    aria-label="streaming cursor"
+                  />
+                )}
               </div>
             )}
 
@@ -124,8 +143,29 @@ const ChatMessage = ({ message, onRetry }) => {
           )}
         </div>
       </div>
+
+      {/* Interactive Citation Inspector Modal */}
+      <CitationModal
+        isOpen={Boolean(selectedCitation)}
+        citation={selectedCitation}
+        toolData={forgedTool || forgeData}
+        docData={message.attachments?.[0]}
+        onClose={() => setSelectedCitation(null)}
+      />
     </div>
   );
 };
 
-export default ChatMessage;
+export default React.memo(ChatMessage, (prevProps, nextProps) => {
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.text === nextProps.message.text &&
+    prevProps.message.isStreaming === nextProps.message.isStreaming &&
+    prevProps.message.isThinking === nextProps.message.isThinking &&
+    prevProps.message.thinking === nextProps.message.thinking &&
+    prevProps.message.isLoading === nextProps.message.isLoading &&
+    prevProps.message.isError === nextProps.message.isError &&
+    prevProps.onRetry === nextProps.onRetry
+  );
+});

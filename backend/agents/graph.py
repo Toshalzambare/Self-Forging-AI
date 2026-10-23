@@ -10,7 +10,7 @@ from agents.nodes.repair import repair_node
 from agents.nodes.register import register_node
 
 from sandbox.profiler import check_security
-from sandbox.executor import execute_in_sandbox
+from sandbox.executor import execute_in_sandbox, INFRASTRUCTURE_ERROR_MARKERS
 from observability import emit_agent_event, AgentLifecycleEvent
 
 async def verify_node(state: AgentState) -> dict:
@@ -20,8 +20,14 @@ async def verify_node(state: AgentState) -> dict:
     user_id = state.get("user_id", "")
     session_id = state.get("session_id", "")
     
-    # 1. Admission Gate: Semantic Profiling
+    # 1. Admission Gate: Semantic Profiling of code and test suite
     violations = check_security(code)
+    code_violations = list(violations)
+    test_violations = []
+    if tests and tests.strip():
+        test_violations = [f"[tests] {v}" for v in check_security(tests)]
+        violations += test_violations
+
     if violations:
         if user_id:
             await emit_agent_event(
@@ -29,15 +35,37 @@ async def verify_node(state: AgentState) -> dict:
                 session_id=session_id,
                 event=AgentLifecycleEvent.TOOL_FAILED,
                 status="security_violation",
-                summary="Code rejected by Admission Gate semantic profiler.",
+                summary="Code or test suite rejected by Admission Gate semantic profiler.",
                 data={"violations": violations, "code_preview": code[:200]},
             )
         return {
             "tests_passed": False,
-            "sandbox_results": f"SECURITY VIOLATION - Code rejected by Admission Gate:\n" + "\n".join(violations)
+            "sandbox_error": False,
+            "test_security_rejected": bool(test_violations) and not code_violations,
+            "test_suite_missing": False,
+            "sandbox_results": f"SECURITY VIOLATION - Rejected by Admission Gate:\n" + "\n".join(violations)
         }
         
-    # 2. Execution Sandbox
+    # 2. Check for empty or non-runnable test suites
+    if not tests or "def test_" not in tests:
+        if user_id:
+            await emit_agent_event(
+                user_id=user_id,
+                session_id=session_id,
+                event=AgentLifecycleEvent.TOOL_FAILED,
+                status="failed",
+                summary="Test generation produced no runnable pytest functions.",
+                data={"tests": tests[:200] if tests else ""},
+            )
+        return {
+            "tests_passed": False,
+            "sandbox_error": False,
+            "test_security_rejected": False,
+            "test_suite_missing": True,
+            "sandbox_results": "Test generation produced no runnable pytest functions (def test_* missing).",
+        }
+
+    # 3. Execution Sandbox
     if user_id:
         await emit_agent_event(
             user_id=user_id,
@@ -48,7 +76,11 @@ async def verify_node(state: AgentState) -> dict:
             data={"attempt": state.get("repair_attempts", 0) + 1},
         )
 
-    passed, logs = await asyncio.to_thread(execute_in_sandbox, code, tests)
+    passed, logs = await asyncio.to_thread(
+        execute_in_sandbox, code, tests, user_id=user_id
+    )
+
+    is_infra_error = not passed and any(err in logs for err in INFRASTRUCTURE_ERROR_MARKERS)
 
     if user_id:
         if passed:
@@ -58,6 +90,15 @@ async def verify_node(state: AgentState) -> dict:
                 event=AgentLifecycleEvent.TOOL_VERIFIED,
                 status="success",
                 summary="Sandbox test verification passed successfully.",
+                data={"logs": logs},
+            )
+        elif is_infra_error:
+            await emit_agent_event(
+                user_id=user_id,
+                session_id=session_id,
+                event=AgentLifecycleEvent.TOOL_FAILED,
+                status="failed",
+                summary="Sandbox infrastructure failure detected. Halting repair attempts.",
                 data={"logs": logs},
             )
         else:
@@ -72,7 +113,10 @@ async def verify_node(state: AgentState) -> dict:
     
     return {
         "tests_passed": passed,
-        "sandbox_results": logs
+        "sandbox_results": logs,
+        "sandbox_error": is_infra_error,
+        "test_security_rejected": False,
+        "test_suite_missing": False,
     }
 
 def should_forge(state: AgentState) -> str:
@@ -85,6 +129,16 @@ def check_tests(state: AgentState) -> str:
     """Router from verify node."""
     if state.get("tests_passed"):
         return "register"
+    
+    if state.get("sandbox_error"):
+        # Infrastructure error: do not attempt LLM repairs on broken sandbox
+        return "end_failure"
+
+    if state.get("test_security_rejected") or state.get("test_suite_missing"):
+        # Test generation issues: retry test generation up to 2 times before failing
+        if state.get("test_repair_attempts", 0) < 2:
+            return "tester"
+        return "end_failure"
     
     if state.get("repair_attempts", 0) >= 3:
         # Give up after 3 attempts
@@ -103,9 +157,18 @@ def build_graph():
     workflow.add_node("repair", repair_node)
     workflow.add_node("register", register_node)
     
-    # Add a failure node just to gracefully handle unrepairable code
+    # Add a failure node just to gracefully handle unrepairable code or infra failure
     async def failure_node(state: AgentState) -> dict:
-        return {"messages": [{"role": "assistant", "content": "Failed to forge a working tool after 3 attempts."}]}
+        if state.get("test_suite_missing"):
+            msg = "Test generation did not produce a runnable pytest suite."
+        elif state.get("test_security_rejected"):
+            msg = "The generated test suite was rejected by the security profiler."
+        elif state.get("sandbox_error"):
+            msg = "Tool verification could not run because the Docker sandbox is unavailable."
+        else:
+            attempts = state.get("repair_attempts", 0)
+            msg = f"Failed to forge a working tool after {attempts} repair attempts." if attempts else "Failed to forge a working tool."
+        return {"messages": [{"role": "assistant", "content": msg}]}
     workflow.add_node("end_failure", failure_node)
 
     # Define edges
@@ -129,6 +192,7 @@ def build_graph():
         {
             "register": "register",
             "repair": "repair",
+            "tester": "tester",
             "end_failure": "end_failure"
         }
     )
@@ -137,6 +201,6 @@ def build_graph():
     
     # Once registered, go back to core to continue the user's task
     workflow.add_edge("register", "core")
-    workflow.add_edge("end_failure", "core")
+    workflow.add_edge("end_failure", END)
     
     return workflow.compile()

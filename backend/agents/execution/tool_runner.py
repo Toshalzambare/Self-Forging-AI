@@ -7,11 +7,13 @@ import asyncio
 import inspect
 import logging
 import time
+import uuid
 from typing import Any, Dict, Optional
 from registry.database import get_db
 from registry.repository import RegistryRepository
 from registry.mcp_manager import dynamic_mcp_registry
-from agents.llm import llm
+from langchain_openai import ChatOpenAI
+from agents.llm import llm, get_llm
 from agents.utils import extract_json_from_text
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -29,7 +31,12 @@ async def _resolve_callable(user_id: Optional[str], tool_id_or_name: str):
     # Fallback: Query PostgreSQL by ID or name to rehydrate memory cache
     try:
         async with get_db() as db:
-            tool = await RegistryRepository.get_tool(db, tool_id_or_name)
+            tool = None
+            try:
+                uuid.UUID(str(tool_id_or_name))
+                tool = await RegistryRepository.get_tool(db, tool_id_or_name)
+            except ValueError:
+                pass
             if not tool:
                 # Try finding by name
                 tools = await RegistryRepository.list_tools(db, user_id=user_id)
@@ -44,6 +51,13 @@ async def _resolve_callable(user_id: Optional[str], tool_id_or_name: str):
                     logger.warning(
                         "Tenant isolation violation: user '%s' attempted to rehydrate tool '%s' owned by '%s'",
                         user_id, tool.id, tool.user_id
+                    )
+                    return None
+
+                if tool.status != "active":
+                    logger.warning(
+                        "Tool '%s' is not active (status: '%s'); skipping rehydration.",
+                        tool.name, tool.status
                     )
                     return None
 
@@ -125,6 +139,7 @@ async def extract_tool_arguments(
     user_task: str,
     tool_name: str,
     schema: Optional[Dict[str, Any]] = None,
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Extract structured arguments for execute(**args) from user prompt using LLM.
@@ -148,7 +163,13 @@ Extract the keyword arguments to pass to execute(...):
 """)
 
     try:
-        response = await llm.ainvoke([sys_prompt, user_prompt])
+        if hasattr(llm, "mock_calls") or not isinstance(llm, ChatOpenAI):
+            active_llm = llm
+        elif model:
+            active_llm = get_llm(model=model)
+        else:
+            active_llm = llm
+        response = await active_llm.ainvoke([sys_prompt, user_prompt])
         parsed = extract_json_from_text(response.content)
         return parsed if isinstance(parsed, dict) else {}
     except Exception as e:

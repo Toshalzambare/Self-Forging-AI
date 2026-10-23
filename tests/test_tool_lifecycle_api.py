@@ -8,6 +8,7 @@ Tests:
 - Inactive tools are ignored by HybridToolSearcher
 """
 import pytest
+import pytest_asyncio
 import os
 import sys
 import uuid
@@ -24,7 +25,7 @@ from auth import create_access_token
 from agents.search.hybrid_search import HybridToolSearcher
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def cleanup():
     dynamic_mcp_registry.clear()
     yield

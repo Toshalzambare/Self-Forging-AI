@@ -9,9 +9,11 @@ import uuid
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 import pytest
+from unittest.mock import patch
 from httpx import AsyncClient, ASGITransport
 
 from main import app
+from config import config
 from registry import get_db, User
 from auth.security import create_access_token, hash_password
 
@@ -77,13 +79,23 @@ async def test_settings_sandbox_lifecycle():
         patch_res = await ac.patch(
             "/api/settings/sandbox",
             headers=headers,
-            json={"memory_limit": "1024m", "timeout_seconds": 45, "network_mode": "bridge"},
+            json={"memory_limit": "1024m", "timeout_seconds": 45, "network_mode": "none"},
         )
         assert patch_res.status_code == 200
         updated = patch_res.json()["sandbox"]
         assert updated["memory_limit"] == "1024m"
         assert updated["timeout_seconds"] == 45
-        assert updated["network_mode"] == "bridge"
+        assert updated["network_mode"] == "none"
+
+        # Verify tenant cannot loosen isolation beyond operator none setting
+        with patch.object(app.state if hasattr(app, "state") and hasattr(app.state, "config") else config, "DOCKER_SANDBOX_NETWORK", "none"):
+            forbidden_res = await ac.patch(
+                "/api/settings/sandbox",
+                headers=headers,
+                json={"network_mode": "bridge"},
+            )
+            assert forbidden_res.status_code == 403
+
 
 
 @pytest.mark.asyncio
@@ -130,11 +142,20 @@ async def test_settings_mcp_servers_crud_and_test_ping():
         server_ids = [s["id"] for s in list_res.json()["mcp_servers"]]
         assert server_id in server_ids
 
-        # Test MCP Server ping
-        test_res = await ac.post(
+        # Test MCP Server ping: SSRF protection rejects loopback targets
+        ssrf_res = await ac.post(
             "/api/settings/mcp_servers/test",
             headers=headers,
             json={"url": "http://127.0.0.1:9"},
+        )
+        assert ssrf_res.status_code == 400
+        assert "disallowed" in ssrf_res.json()["detail"]
+
+        # Test MCP Server ping: External URL test
+        test_res = await ac.post(
+            "/api/settings/mcp_servers/test",
+            headers=headers,
+            json={"url": "https://example.com/mcp"},
         )
         assert test_res.status_code == 200
         ping_result = test_res.json()

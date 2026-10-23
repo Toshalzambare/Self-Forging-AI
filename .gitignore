@@ -76,3 +76,7 @@ scratch/
 
 .agents/
 .planning/
+coderabbit_raw.jsonl
+CODERABBIT_REVIEW.md
+temp/
+.temp/

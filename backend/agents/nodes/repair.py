@@ -2,7 +2,7 @@ import json
 import logging
 from pydantic import BaseModel, Field
 from agents.state import AgentState
-from agents.llm import llm
+from agents.llm import get_llm
 from agents.utils import extract_json_from_text
 from agents.research.engine import ResearchEngine
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -58,7 +58,8 @@ Return ONLY a valid JSON object with EXACTLY this key:
 
     user_prompt = HumanMessage(content=user_content)
     
-    response = await llm.ainvoke([sys_prompt, user_prompt])
+    active_llm = get_llm(model=state.get("model"))
+    response = await active_llm.ainvoke([sys_prompt, user_prompt])
     content = response.content
     
     try:

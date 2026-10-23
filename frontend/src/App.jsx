@@ -21,7 +21,9 @@ const App = () => {
   const [modelModalOpen, setModelModalOpen] = useState(false);
   const [logsDrawerOpen, setLogsDrawerOpen] = useState(false);
   const [codeModalData, setCodeModalData] = useState({ isOpen: false, toolName: '', code: '' });
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
+  const [selectedModel, setSelectedModel] = useState(() => {
+    return localStorage.getItem('sfa_selected_model') || DEFAULT_MODEL;
+  });
   const [toast, setToast] = useState({ visible: false, title: '', message: '' });
 
   const showToast = useCallback((title, message) => {
@@ -33,9 +35,9 @@ const App = () => {
     setUser(userData);
   };
 
-  const handleLogout = async () => {
-    await authLogout();
+  const handleLogout = () => {
     setUser(null);
+    authLogout().catch((err) => console.error('Logout error:', err));
   };
 
   const handleInspectCode = (toolName, code) => {
@@ -115,6 +117,11 @@ const App = () => {
         selectedModel={selectedModel}
         onSelectModel={(model) => {
           setSelectedModel(model);
+          try {
+            localStorage.setItem('sfa_selected_model', model);
+          } catch (e) {
+            console.error('Failed to save selected model to localStorage:', e);
+          }
           showToast('Model Updated', `Switched to ${model}`);
         }}
       />

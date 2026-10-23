@@ -8,6 +8,7 @@ Tests:
 - core_node post-registration execution loop and grounded response synthesis
 """
 import pytest
+import pytest_asyncio
 import os
 import sys
 import uuid
@@ -25,7 +26,7 @@ from agents.nodes.core import core_node
 from langchain_core.messages import AIMessage, HumanMessage
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def cleanup():
     dynamic_mcp_registry.clear()
     yield

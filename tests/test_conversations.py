@@ -5,6 +5,7 @@ Conversation & Message Persistence Test Suite:
 - Automated conversation provisioning and message persistence via /api/chat
 """
 import pytest
+import pytest_asyncio
 import uuid
 import sys
 import os
@@ -21,7 +22,7 @@ from registry.database import engine
 from conversation.service import ConversationService
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def cleanup_engine():
     yield
     await engine.dispose()

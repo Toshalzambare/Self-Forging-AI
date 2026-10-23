@@ -10,7 +10,7 @@ import time
 import json
 from datetime import datetime, timezone
 from dataclasses import dataclass, asdict
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -34,7 +34,7 @@ class DummyTool:
         self.reuse_count = 1
 
 
-def run_benchmark_suite() -> Dict[str, Any]:
+def run_benchmark_suite(output_dir: Optional[str] = None) -> Dict[str, Any]:
     print("=" * 70)
     print("  SELF-FORGING AI: 20-TASK RESEARCH BENCHMARK EVALUATION")
     print("=" * 70)
@@ -64,11 +64,26 @@ def run_benchmark_suite() -> Dict[str, Any]:
         t0_reuse = time.perf_counter()
         is_admissible, eff_score, rationale = evaluate_effectiveness(tool, task["prompt"], args)
         
-        # Gate 2 regression check
+        # Gate 2 regression verification
         gate2_passed = True
-        if task.get("expected_regression_failure"):
+        gate2_inconclusive = False
+        if not is_admissible:
             gate2_passed = False
-            rationale = "Gate 2 Regression Failed: Assertions mismatched"
+        elif tool.tests_code and tool.tests_code.strip():
+            from agents.evaluation.gate_two import evaluate_regression
+            res, log = evaluate_regression(tool)
+            if res is not None:
+                gate2_passed = res
+                if not gate2_passed:
+                    rationale = f"Gate 2 Regression Failed: {log[:60]}"
+            else:
+                gate2_passed = False
+                gate2_inconclusive = True
+                rationale = f"Gate 2 inconclusive: {log[:60]}"
+        elif task.get("expected_regression_failure"):
+            gate2_passed = False
+            gate2_inconclusive = True
+            rationale = "Gate 2 inconclusive: no stored regression tests"
 
         total_admitted = is_admissible and gate2_passed
         elapsed_reuse_ms = round((time.perf_counter() - t0_reuse) * 1000, 2)
@@ -76,32 +91,37 @@ def run_benchmark_suite() -> Dict[str, Any]:
 
         sec_caught = False
         if task.get("expected_security_violation"):
-            violations = check_security(code)
-            sec_caught = len(violations) > 0
+            sec_caught = (not is_admissible) and ("Security profiling rejected" in rationale or "security" in rationale.lower())
 
         reg_caught = False
         if task.get("expected_schema_rejection") or task.get("expected_regression_failure"):
-            reg_caught = not total_admitted
+            reg_caught = not total_admitted and not gate2_inconclusive
 
         results_mode_a.append({
             "id": tid, "name": task["name"], "category": cat,
             "admitted": total_admitted, "score": eff_score, "latency_ms": elapsed_reuse_ms,
             "security_caught": sec_caught, "regression_caught": reg_caught,
+            "inconclusive": gate2_inconclusive,
         })
 
         # ── Mode B: Dual-Gate DISABLED (Naive direct execution without gates) ──
-        # Naive mode accepts everything without AST profiling or schema checks
+        t0_naive = time.perf_counter()
+        elapsed_naive_ms = round((time.perf_counter() - t0_naive) * 1000, 2)
         results_mode_b.append({
             "id": tid, "name": task["name"], "category": cat,
-            "admitted": True,  # naive direct execution accepts blindly
-            "score": 1.0, "latency_ms": 0.5,
-            "security_caught": False,  # failed to catch security violation!
-            "regression_caught": False,  # failed to catch regression!
+            "admitted": True,
+            "score": 1.0, "latency_ms": max(elapsed_naive_ms, 0.1),
+            "security_caught": False,
+            "regression_caught": False,
         })
 
     # ── Summary Calculations ──────────────────────────────────────────────────
     sec_tasks = [t for t in BENCHMARK_TASKS if t.get("expected_security_violation")]
-    reg_tasks = [t for t in BENCHMARK_TASKS if t.get("expected_schema_rejection") or t.get("expected_regression_failure")]
+    eval_reg_tasks = [
+        r for r, t in zip(results_mode_a, BENCHMARK_TASKS)
+        if (t.get("expected_schema_rejection") or t.get("expected_regression_failure"))
+        and not r.get("inconclusive", False)
+    ]
     synth_tasks = [t for t in BENCHMARK_TASKS if t["category"] in ("synthesis", "repair")]
 
     sec_caught_a = sum(1 for r in results_mode_a if r["security_caught"])
@@ -109,17 +129,21 @@ def run_benchmark_suite() -> Dict[str, Any]:
     sec_rate_a = (sec_caught_a / len(sec_tasks)) * 100 if sec_tasks else 100.0
     sec_rate_b = (sec_caught_b / len(sec_tasks)) * 100 if sec_tasks else 0.0
 
-    reg_caught_a = sum(1 for r in results_mode_a if r["regression_caught"])
+    reg_caught_a = sum(1 for r in eval_reg_tasks if r["regression_caught"])
     reg_caught_b = sum(1 for r in results_mode_b if r["regression_caught"])
-    reg_rate_a = (reg_caught_a / len(reg_tasks)) * 100 if reg_tasks else 100.0
-    reg_rate_b = (reg_caught_b / len(reg_tasks)) * 100 if reg_tasks else 0.0
+    reg_rate_a = (reg_caught_a / len(eval_reg_tasks)) * 100 if eval_reg_tasks else 100.0
+    reg_rate_b = (reg_caught_b / len(eval_reg_tasks)) * 100 if eval_reg_tasks else 0.0
 
-    synth_admitted_a = sum(1 for r in results_mode_a if r["category"] in ("synthesis", "repair") and r["admitted"])
-    synth_rate_a = (synth_admitted_a / len(synth_tasks)) * 100
+    synth_results_a = [
+        r for r in results_mode_a
+        if r["category"] in ("synthesis", "repair") and not r.get("inconclusive", False)
+    ]
+    synth_admitted_a = sum(1 for r in synth_results_a if r["admitted"])
+    synth_rate_a = (synth_admitted_a / len(synth_results_a)) * 100 if synth_results_a else 0.0
 
     avg_cold_ms = round(sum(cold_latencies) / len(cold_latencies), 1)
     avg_reuse_ms = round(sum(reuse_latencies) / len(reuse_latencies), 1)
-    speedup = round(avg_cold_ms / max(avg_reuse_ms, 0.1), 1)
+    inconclusive_count = sum(1 for r in results_mode_a if r.get("inconclusive", False))
 
     summary = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -130,29 +154,33 @@ def run_benchmark_suite() -> Dict[str, Any]:
             "ast_security_catch_rate_mode_b_pct": sec_rate_b,
             "regression_prevention_mode_a_pct": reg_rate_a,
             "regression_prevention_mode_b_pct": reg_rate_b,
-            "avg_cold_synthesis_ms": avg_cold_ms,
+            "simulated_cold_synthesis_ms": avg_cold_ms,
             "avg_dual_gate_reuse_ms": avg_reuse_ms,
-            "reuse_speedup_factor": f"{speedup}x",
+            "inconclusive_tasks_count": inconclusive_count,
         },
         "mode_a_results": results_mode_a,
         "mode_b_results": results_mode_b,
     }
 
-    # Save results json
-    json_path = os.path.join(os.path.dirname(__file__), "benchmark_results.json")
+    # Save results json and markdown report
+    if output_dir:
+        json_path = os.path.join(output_dir, "benchmark_results.json")
+        report_path = os.path.join(output_dir, "BENCHMARK_REPORT.md")
+    else:
+        json_path = os.path.join(os.path.dirname(__file__), "benchmark_results.json")
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        report_path = os.path.join(root_dir, "BENCHMARK_REPORT.md")
+
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
 
-    # Save markdown report in project root
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    report_path = os.path.join(root_dir, "BENCHMARK_REPORT.md")
     generate_markdown_report(report_path, summary)
 
     print("\nBenchmark Run Complete:")
-    print(f" - Tool Synthesis & Repair Accuracy: {synth_rate_a:.1f}%")
+    print(f" - Gate Verification Accuracy: {synth_rate_a:.1f}%")
     print(f" - AST Security Catch Rate (Mode A vs B): {sec_rate_a:.1f}% vs {sec_rate_b:.1f}%")
     print(f" - Regression Prevention Rate (Mode A vs B): {reg_rate_a:.1f}% vs {reg_rate_b:.1f}%")
-    print(f" - Cold Synthesis vs Dual-Gate Reuse: {avg_cold_ms}ms -> {avg_reuse_ms}ms ({speedup}x faster)")
+    print(f" - Measured Dual-Gate Reuse: {avg_reuse_ms}ms (Simulated Cold Baseline: {avg_cold_ms}ms)")
     print(f" - Report written to: {report_path}")
     print("=" * 70)
     return summary
@@ -165,17 +193,16 @@ def generate_markdown_report(path: str, summary: Dict[str, Any]) -> None:
         "",
         f"**Date:** {summary['timestamp']}  ",
         f"**Tasks Evaluated:** {summary['total_tasks']} Standardized Benchmarks  ",
-        "**Methodology:** Comparative ablation evaluating Dual-Gate Enabled (Mode A) versus Direct Naive Reuse (Mode B).",
+        "**Methodology:** Gate-only comparative evaluation with simulated baseline comparison (Mode A Dual-Gate vs Mode B Naive Reuse).",
         "",
         "## Key Performance Indicators (KPIs)",
         "",
-        "| Research Metric | Mode A (Dual-Gate Enabled) | Mode B (Dual-Gate Disabled) | Academic Significance |",
+        "| Research Metric | Mode A (Dual-Gate Enabled) | Mode B (Bypassed Baseline) | Academic Significance |",
         "|---|---|---|---|",
-        f"| **AST Security Catch Rate** | **{m['ast_security_catch_rate_mode_a_pct']}%** | {m['ast_security_catch_rate_mode_b_pct']}% | Prevents arbitrary code execution & socket exfiltration |",
-        f"| **Regression Catch Rate** | **{m['regression_prevention_mode_a_pct']}%** | {m['regression_prevention_mode_b_pct']}% | Eliminates silent logic degradation & schema drift |",
-        f"| **Synthesis & Repair Success** | **{m['synthesis_accuracy_pct']}%** | {m['synthesis_accuracy_pct']}% | High-fidelity tool generation across numeric, text & logic tasks |",
-        f"| **Average Execution Latency** | **{m['avg_dual_gate_reuse_ms']} ms** | 0.5 ms (Unchecked) | Full safety validation overhead remains under 50ms |",
-        f"| **Cold Synthesis Latency** | {m['avg_cold_synthesis_ms']} ms | {m['avg_cold_synthesis_ms']} ms | Tool reuse delivers a **{m['reuse_speedup_factor']}** speedup factor |",
+        f"| **AST Security Catch Rate** | **{m['ast_security_catch_rate_mode_a_pct']}%** | {m['ast_security_catch_rate_mode_b_pct']}% (No security gate) | Prevents arbitrary code execution & socket exfiltration |",
+        f"| **Regression Catch Rate** | **{m['regression_prevention_mode_a_pct']}%** | {m['regression_prevention_mode_b_pct']}% (No regression gate) | Eliminates silent logic degradation & schema drift |",
+        f"| **Gate Verification Rate** | **{m['synthesis_accuracy_pct']}%** | N/A (no gates) | Verification rate across numeric, text & logic task definitions |",
+        f"| **Average Gate Validation Latency** | **{m['avg_dual_gate_reuse_ms']} ms** | {summary['mode_b_results'][0]['latency_ms']} ms (Unchecked baseline) | Measured dual-gate safety validation latency |",
         "",
         "## 20-Task Evaluation Breakdown",
         "",
@@ -188,12 +215,14 @@ def generate_markdown_report(path: str, summary: Dict[str, Any]) -> None:
         reg_badge = "N/A" if not r["regression_caught"] and r["category"] != "security_regression" else ("Blocked (Prevented)" if r["regression_caught"] else "Clean")
         lines.append(f"| `{r['id']}` | {r['name']} | `{r['category']}` | {status_badge} | {sec_badge} | {reg_badge} |")
 
+    inconclusive_count = m.get("inconclusive_tasks_count", 0)
+    inconclusive_note = f" ({inconclusive_count} task(s) marked inconclusive due to sandbox unavailability)" if inconclusive_count else ""
     lines.extend([
         "",
         "## Empirical Conclusions",
-        "1. **Safety Assurance**: The Dual-Gate architecture achieved a **100% catch rate** against dangerous AST constructs (unauthorized subprocess calls, dynamic `eval()`, network socket exfiltration) where naive agent reuse permitted dangerous execution.",
-        "2. **Regression Prevention**: Gate 1 schema parsing and Gate 2 regression verification successfully caught 100% of schema omissions and broken internal logic, eliminating runtime crashes.",
-        f"3. **Efficiency Gain**: Reusing validated tools through the Dynamic MCP Registry yielded an average latency of **{m['avg_dual_gate_reuse_ms']}ms**, representing a **{m['reuse_speedup_factor']}** speedup compared to cold tool synthesis ({m['avg_cold_synthesis_ms']}ms).",
+        f"1. **Safety Assurance**: The Dual-Gate architecture achieved an AST security catch rate of **{m['ast_security_catch_rate_mode_a_pct']:.1f}%** (vs {m['ast_security_catch_rate_mode_b_pct']:.1f}% for naive Mode B) against dangerous constructs.",
+        f"2. **Regression Prevention**: Gate 1 schema parsing and Gate 2 regression verification achieved a regression prevention rate of **{m['regression_prevention_mode_a_pct']:.1f}%**{inconclusive_note}.",
+        f"3. **Dual-Gate Validation Latency**: Measured dual-gate safety validation latency averaged **{m['avg_dual_gate_reuse_ms']}ms**, ensuring fast deterministic safety verification before tool execution.",
         "",
     ])
 

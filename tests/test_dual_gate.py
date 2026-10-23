@@ -6,6 +6,7 @@ Tests:
 - DualGateEngine: End-to-end admission, metrics promotion, Bayesian decay, and quarantine transitions
 """
 import pytest
+import pytest_asyncio
 import os
 import sys
 import uuid
@@ -22,7 +23,7 @@ from agents.evaluation.gate_two import evaluate_regression
 from agents.evaluation.dual_gate import DualGateEngine
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def cleanup():
     yield
     await engine.dispose()

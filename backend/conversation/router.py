@@ -4,6 +4,7 @@ updating, and deleting persistent multi-tenant chat conversations.
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from registry.database import get_db_session
@@ -15,8 +16,10 @@ from conversation.schemas import (
     ConversationSummary,
     ConversationDetail,
     MessageResponse,
+    ChatStreamRequest,
 )
 from conversation.service import ConversationService
+from conversation.stream_service import stream_conversation_events
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
@@ -152,3 +155,31 @@ async def delete_conversation(
             detail="Conversation not found or access denied.",
         )
     return None
+
+
+@router.post("/{conversation_id}/stream")
+async def stream_conversation_message(
+    conversation_id: str,
+    req: ChatStreamRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Stream agent conversation lifecycle events and word-by-word token chunks
+    via Server-Sent Events (SSE).
+    """
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+        "Content-Type": "text/event-stream",
+    }
+    return StreamingResponse(
+        stream_conversation_events(
+            conversation_id=conversation_id,
+            user_prompt=req.message,
+            user_id=str(current_user.id),
+            model=req.model,
+        ),
+        headers=headers,
+        media_type="text/event-stream",
+    )

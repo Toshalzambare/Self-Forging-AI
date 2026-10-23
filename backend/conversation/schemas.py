@@ -12,6 +12,11 @@ class MessageCreate(BaseModel):
     forge_data: Optional[Dict[str, Any]] = None
 
 
+class ChatStreamRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=100000)
+    model: Optional[str] = None
+
+
 class MessageResponse(BaseModel):
     id: str
     conversation_id: str

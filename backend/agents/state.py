@@ -46,3 +46,18 @@ class AgentState(TypedDict):
     # Tool registration status & UUID in database
     is_registered: bool
     registered_tool_id: str
+
+    # Sandbox infrastructure failure flag
+    sandbox_error: bool
+
+    # Dedicated test suite security rejection flag and retry counter
+    test_security_rejected: bool
+    test_repair_attempts: int
+
+    # Dedicated test suite missing/unrunnable flag
+    test_suite_missing: bool
+
+    # Active LLM model identifier for runtime dispatch
+    model: str
+
+

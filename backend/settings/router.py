@@ -16,11 +16,12 @@ from registry.database import get_db_session
 from registry.models import User, Provider, McpServer
 from registry.repository import RegistryRepository
 from auth.dependencies import get_current_user
+from agents.research.doc_extractor import is_safe_url_async, resolve_safe_target_async
 from config import config
+from settings.schemas import ProviderUpdate, SandboxUpdate, McpServerCreate, McpServerTest
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-# In-memory user sandbox preferences cache (keyed by user_id)
 _USER_SANDBOX_CONFIG: Dict[str, Dict[str, Any]] = {}
 
 
@@ -29,29 +30,15 @@ def _get_default_sandbox() -> Dict[str, Any]:
         "image": getattr(config, "DOCKER_SANDBOX_IMAGE", "sfa-sandbox:latest"),
         "memory_limit": getattr(config, "DOCKER_SANDBOX_MEMORY_LIMIT", "512m"),
         "timeout_seconds": getattr(config, "DOCKER_SANDBOX_TIMEOUT", 60),
-        "network_mode": getattr(config, "DOCKER_SANDBOX_NETWORK", "bridge"),
+        "network_mode": getattr(config, "DOCKER_SANDBOX_NETWORK", "none"),
     }
 
 
-class ProviderUpdate(BaseModel):
-    api_key: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
-class SandboxUpdate(BaseModel):
-    image: Optional[str] = None
-    memory_limit: Optional[str] = None
-    timeout_seconds: Optional[int] = Field(None, ge=1, le=60)
-    network_mode: Optional[str] = None
-
-
-class McpServerCreate(BaseModel):
-    name: str
-    url: str
-
-
-class McpServerTest(BaseModel):
-    url: str
+def get_user_sandbox_config(user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Retrieve configured sandbox resource limits for a user."""
+    if user_id and user_id in _USER_SANDBOX_CONFIG:
+        return _USER_SANDBOX_CONFIG[user_id]
+    return _get_default_sandbox()
 
 
 @router.get("/profile")
@@ -91,7 +78,13 @@ async def update_sandbox_config(
     if req.timeout_seconds is not None:
         current["timeout_seconds"] = req.timeout_seconds
     if req.network_mode is not None:
-        current["network_mode"] = req.network_mode.strip()
+        requested = req.network_mode.strip()
+        if requested != "none" and getattr(config, "DOCKER_SANDBOX_NETWORK", "none") == "none":
+            raise HTTPException(
+                status_code=403,
+                detail="Network access for the sandbox is disabled by the server operator.",
+            )
+        current["network_mode"] = requested
 
     _USER_SANDBOX_CONFIG[user_id] = current
     return {"status": "success", "sandbox": current}
@@ -159,7 +152,10 @@ async def update_provider(
             provider.is_active = req.is_active
 
     await db.commit()
-    return {"status": "success", "message": f"Settings updated for {provider.name}"}
+    return {
+        "status": "success",
+        "message": f"Stored credentials updated for {provider.name}. Agent calls route via active OmniRoute gateway.",
+    }
 
 
 @router.get("/mcp_servers")
@@ -224,16 +220,21 @@ async def delete_mcp_server(
 
 
 @router.post("/mcp_servers/test")
-async def test_mcp_server(req: McpServerTest):
+async def test_mcp_server(req: McpServerTest, current_user: User = Depends(get_current_user)):
     """Ping an external MCP endpoint with a 3-second timeout and return latency/status."""
     url = req.url.strip()
     if not url.startswith(("http://", "https://")):
         url = "http://" + url
+    target = await resolve_safe_target_async(url)
+    if not target:
+        raise HTTPException(status_code=400, detail="URL targets a disallowed address.")
 
+    bound_url, host_header, sni_hostname = target
     start = time.perf_counter()
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            resp = await client.get(url)
+        async with httpx.AsyncClient(timeout=3.0, follow_redirects=False) as client:
+            ext = {"sni_hostname": sni_hostname} if sni_hostname else None
+            resp = await client.get(bound_url, headers={"Host": host_header}, extensions=ext)
             elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
             is_ok = resp.status_code < 500
             return {

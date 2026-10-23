@@ -75,18 +75,40 @@ class DynamicMcpRegistry:
             logger.error("Failed to register tool '%s': code is empty", name)
             return False
 
+        import ast
+        from sandbox.profiler import check_security
+        violations = check_security(code)
+        if violations:
+            logger.error("Security violations in tool '%s': %s", name, violations)
+            return False
+
         tool_schema = schema or {}
-        local_scope: Dict[str, Any] = {}
 
         try:
-            # Compile and execute the verified code in an isolated scope
-            compiled_bytecode = compile(code, f"<dynamic_tool_{name}>", "exec")
-            exec(compiled_bytecode, local_scope)
-
-            callable_fn = local_scope.get("execute")
-            if not callable(callable_fn):
-                logger.error("Tool '%s' does not define a callable 'execute' function", name)
+            tree = ast.parse(code)
+            exec_node = next(
+                (n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "execute"),
+                None
+            )
+            if not exec_node:
+                logger.error("Tool '%s' does not define a top-level 'execute' function", name)
                 return False
+
+            param_names = [a.arg for a in exec_node.args.args]
+
+            from sandbox.isolated_runner import execute_tool_isolated_sync
+
+            def _make_isolated_invoker(tool_code: str, params: list):
+                def _isolated_callable(*args, **kwargs):
+                    call_args = {}
+                    for p_name, val in zip(params, args):
+                        call_args[p_name] = val
+                    call_args.update(kwargs)
+                    exec_res = execute_tool_isolated_sync(tool_code, call_args)
+                    if not exec_res["success"]:
+                        raise RuntimeError(exec_res.get("error") or "Tool execution failed")
+                    return exec_res.get("result")
+                return _isolated_callable
 
             entry = DynamicToolEntry(
                 tool_id=tool_id,
@@ -94,7 +116,7 @@ class DynamicMcpRegistry:
                 user_id=user_id,
                 code=code,
                 schema=tool_schema,
-                callable_fn=callable_fn,
+                callable_fn=_make_isolated_invoker(code, param_names),
             )
 
             id_key = self._namespace_key(user_id, tool_id)
@@ -103,11 +125,11 @@ class DynamicMcpRegistry:
             self._entries_by_id[id_key] = entry
             self._entries_by_name[name_key] = entry
 
-            logger.info("Successfully hot-swapped dynamic tool '%s' (ID: %s, User: %s)", name, tool_id, user_id)
+            logger.info("Successfully registered isolated dynamic tool '%s' (ID: %s, User: %s)", name, tool_id, user_id)
             return True
 
         except Exception as e:
-            logger.error("Failed compiling and registering tool '%s': %s", name, str(e), exc_info=True)
+            logger.error("Failed validating and registering tool '%s': %s", name, str(e), exc_info=True)
             return False
 
     def get_tool_callable(

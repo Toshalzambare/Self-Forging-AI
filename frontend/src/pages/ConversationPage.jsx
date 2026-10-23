@@ -16,6 +16,8 @@ const ConversationPage = ({
 }) => {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const isNearBottomRef = useRef(true);
   const navigate = useNavigate();
 
   const {
@@ -34,7 +36,7 @@ const ConversationPage = ({
     togglePin,
     deleteConversation,
     sendMessage,
-  } = useConversationManager(showToast);
+  } = useConversationManager(showToast, selectedModel);
 
   const {
     attachments,
@@ -43,15 +45,26 @@ const ConversationPage = ({
     removeAttachment,
   } = useConversationAttachments(activeId, showToast, createConversation);
 
-  // Auto-scroll on new messages
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const threshold = 120;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceFromBottom <= threshold;
+  };
+
+  // Smart auto-scroll: smoothly scroll to bottom if user is already near bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, activeForgeState]);
 
   const handleSend = () => {
     if ((!inputText.trim() && !attachments.length) || isSending || isUploadingAttachment) return;
     const text = inputText.trim() || 'Please analyze the attached document(s) and assist with the data.';
     setInputText('');
+    isNearBottomRef.current = true;
     sendMessage(text);
   };
 
@@ -150,7 +163,11 @@ const ConversationPage = ({
         </header>
 
         {/* Message Stream */}
-        <div className="flex-1 overflow-y-auto px-3 sm:px-6 md:px-8 py-6 custom-scrollbar">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto px-3 sm:px-6 md:px-8 py-6 custom-scrollbar"
+        >
           <div className="max-w-4xl mx-auto w-full">
             {isLoadingMessages ? (
               <div className="flex flex-col items-center justify-center py-24 text-slate-500 space-y-3">

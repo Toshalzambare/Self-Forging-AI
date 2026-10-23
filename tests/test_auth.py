@@ -8,6 +8,7 @@ Authentication test suite:
 - Protected /api/auth/me and /api/auth/sessions endpoints
 """
 import pytest
+import pytest_asyncio
 import uuid
 import sys
 import os
@@ -30,7 +31,7 @@ from auth.google import verify_google_credential
 from registry.database import engine
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def cleanup_engine():
     yield
     await engine.dispose()
@@ -76,8 +77,10 @@ def test_refresh_token_generation():
     assert hash_refresh_token(token) == hashed
 
 
-def test_google_token_verification():
+def test_google_token_verification(monkeypatch):
     """Verify Google token verification with mock dev token and invalid tokens."""
+    from config import config
+    monkeypatch.setattr(config, "ALLOW_MOCK_GOOGLE_AUTH", True)
     # Invalid token
     assert verify_google_credential("invalid-token") is None
     assert verify_google_credential("") is None
@@ -147,8 +150,10 @@ def test_signup_and_login_flow():
     assert bad_login.status_code == 401
 
 
-def test_google_auth_provisioning_and_linking():
+def test_google_auth_provisioning_and_linking(monkeypatch):
     """Verify Google OAuth auto-provisioning and existing account linking."""
+    from config import config
+    monkeypatch.setattr(config, "ALLOW_MOCK_GOOGLE_AUTH", True)
     client = TestClient(app)
     uid = uuid.uuid4().hex[:8]
     google_email = f"google_{uid}@example.com"
@@ -205,13 +210,44 @@ def test_refresh_token_rotation_and_replay_detection():
     assert rotate_res_2.status_code == 200
     refresh_token_3 = rotate_res_2.json()["refresh_token"]
 
-    # 3. Replay attack: attempt to reuse the consumed refresh_token_1
+    # 3. Concurrent request / grace window: reuse consumed refresh_token_1 within grace window
+    grace_res = client.post("/api/auth/refresh", json={"refresh_token": refresh_token_1})
+    assert grace_res.status_code == 401
+    assert "recently rotated" in grace_res.json()["detail"].lower()
+
+    # Active session is protected and still works
+    valid_res = client.post("/api/auth/refresh", json={"refresh_token": refresh_token_3})
+    assert valid_res.status_code == 200
+    refresh_token_4 = valid_res.json()["refresh_token"]
+
+    # 4. Simulate outside grace window (>15s ago)
+    import asyncio
+    from registry.database import get_db
+    from sqlalchemy import update
+    from registry.models import UserSession
+    from datetime import datetime, timezone, timedelta
+
+    test_user_id = signup_res.json()["user"]["id"]
+
+    async def _age_sessions():
+        async with get_db() as db:
+            past = datetime.now(timezone.utc) - timedelta(seconds=30)
+            await db.execute(
+                update(UserSession)
+                .where(UserSession.user_id == uuid.UUID(test_user_id))
+                .values(last_used_at=past)
+            )
+            await db.commit()
+
+    asyncio.run(_age_sessions())
+
+    # Replay attack outside grace window: revokes all sessions
     replay_res = client.post("/api/auth/refresh", json={"refresh_token": refresh_token_1})
     assert replay_res.status_code == 401
     assert "Revoked token reuse detected" in replay_res.json()["detail"]
 
-    # 4. Because replay attack revoked ALL sessions for this user, refresh_token_3 should now also be revoked!
-    revoked_res = client.post("/api/auth/refresh", json={"refresh_token": refresh_token_3})
+    # refresh_token_4 should now also be revoked
+    revoked_res = client.post("/api/auth/refresh", json={"refresh_token": refresh_token_4})
     assert revoked_res.status_code == 401
 
 

@@ -4,9 +4,9 @@ import { APP_NAME } from '../../config.js';
 const EmptyChatStarters = ({ onSelectPrompt }) => {
   const starters = [
     {
-      title: 'Scrape Web Data',
-      prompt: 'Scrape the top 5 articles from Hacker News and summarize their key takeaways.',
-      icon: 'travel_explore',
+      title: 'Text Analysis & Metrics',
+      prompt: 'Analyze a block of text to calculate word frequency, reading difficulty score, and extract the top keywords.',
+      icon: 'analytics',
       color: 'from-blue-500/20 to-indigo-500/20 text-blue-400 border-blue-500/30',
     },
     {
@@ -22,9 +22,9 @@ const EmptyChatStarters = ({ onSelectPrompt }) => {
       color: 'from-amber-500/20 to-orange-500/20 text-amber-400 border-amber-500/30',
     },
     {
-      title: 'API Integration Tool',
-      prompt: 'Fetch the current weather coordinates and temperature for Tokyo, Japan using Open-Meteo.',
-      icon: 'wb_sunny',
+      title: 'Statistical Analysis Tool',
+      prompt: 'Calculate the mean, median, standard deviation, and 95th percentile for a series of system latency values.',
+      icon: 'query_stats',
       color: 'from-emerald-500/20 to-teal-500/20 text-emerald-400 border-emerald-500/30',
     },
   ];

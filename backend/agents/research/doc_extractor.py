@@ -2,6 +2,8 @@
 Documentation extractor for technical web research.
 Fetches HTML from documentation sites and parses clean, grounded technical summaries.
 """
+import asyncio
+import functools
 import ipaddress
 import logging
 import re
@@ -18,42 +20,80 @@ MAX_DOC_CHARS = 2500
 MAX_REDIRECTS = 3
 
 
-def is_safe_url(target_url: str) -> bool:
+async def is_safe_url_async(target_url: str) -> bool:
+    """Non-blocking async wrapper for SSRF URL validation."""
+    return await asyncio.to_thread(is_safe_url, target_url)
+
+
+def is_safe_ip(ip_str: str) -> bool:
+    """Check if an IP string is globally routable and public."""
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        return ip.is_global and not ip.is_multicast
+    except Exception:
+        return False
+
+
+def resolve_safe_target(target_url: str) -> Optional[tuple[str, str, Optional[str]]]:
     """
     Validates that a URL does not point to internal, private, loopback,
-    or link-local addresses (SSRF prevention).
+    or link-local addresses, and resolves hostname to a validated safe IP.
+    Returns (bound_url, host_header, sni_hostname) or None if unsafe.
+    Directly binding requests to the validated IP prevents DNS rebinding (TOCTOU).
     """
     try:
         parsed = urllib.parse.urlsplit(target_url)
         if parsed.scheme not in ("http", "https"):
-            return False
+            return None
 
         hostname = parsed.hostname
         if not hostname:
-            return False
+            return None
 
-        # Reject loopback and local hostnames directly
         lower_host = hostname.lower()
         if lower_host in ("localhost", "127.0.0.1", "::1") or lower_host.endswith(".local"):
-            return False
+            return None
 
-        # Resolve IP addresses for hostname
-        addr_info = socket.getaddrinfo(hostname, None)
-        for item in addr_info:
-            ip_str = item[4][0]
-            ip = ipaddress.ip_address(ip_str)
-            if (
-                ip.is_private
-                or ip.is_loopback
-                or ip.is_link_local
-                or ip.is_reserved
-                or ip.is_multicast
-            ):
-                return False
+        # If literal IP, check directly without DNS
+        try:
+            lit_ip = ipaddress.ip_address(lower_host)
+            if not is_safe_ip(str(lit_ip)):
+                return None
+            bound_ip = str(lit_ip)
+        except ValueError:
+            # Fresh DNS resolution and verify all returned records are public
+            addr_info = socket.getaddrinfo(hostname, None)
+            if not addr_info:
+                return None
+            for item in addr_info:
+                ip_str = item[4][0]
+                if not is_safe_ip(ip_str):
+                    return None
+            bound_ip = addr_info[0][4][0]
 
-        return True
+        ip_host = f"[{bound_ip}]" if ":" in bound_ip else bound_ip
+        port_str = f":{parsed.port}" if parsed.port else ""
+        path = parsed.path or "/"
+        if parsed.query:
+            path += f"?{parsed.query}"
+        bound_url = f"{parsed.scheme}://{ip_host}{port_str}{path}"
+        host_header = f"{hostname}{port_str}"
+        sni_hostname = hostname if parsed.scheme == "https" else None
+        return bound_url, host_header, sni_hostname
     except Exception:
-        return False
+        return None
+
+
+async def resolve_safe_target_async(target_url: str) -> Optional[tuple[str, str, Optional[str]]]:
+    """Non-blocking async wrapper for resolve_safe_target."""
+    return await asyncio.to_thread(resolve_safe_target, target_url)
+
+
+def is_safe_url(target_url: str) -> bool:
+    """Check if target_url resolves to a verified safe public IP."""
+    return resolve_safe_target(target_url) is not None
 
 
 def clean_html_to_markdown(html_content: str, max_chars: int = MAX_DOC_CHARS) -> str:
@@ -133,11 +173,15 @@ async def extract_documentation(url: str, timeout: Optional[int] = None) -> str:
         ) as client:
             response = None
             for _ in range(MAX_REDIRECTS + 1):
-                if not is_safe_url(current_url):
+                target = await resolve_safe_target_async(current_url)
+                if not target:
                     logger.warning("SSRF blocked attempt to access unsafe URL: %s", current_url)
                     return ""
-
-                response = await client.get(current_url)
+                bound_url, host_header, sni_hostname = target
+                req_headers = dict(headers)
+                req_headers["Host"] = host_header
+                ext = {"sni_hostname": sni_hostname} if sni_hostname else None
+                response = await client.get(bound_url, headers=req_headers, extensions=ext)
                 if response.is_redirect and "location" in response.headers:
                     current_url = urllib.parse.urljoin(current_url, response.headers["location"])
                 else:

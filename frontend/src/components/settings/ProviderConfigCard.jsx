@@ -62,7 +62,7 @@ export const ProviderConfigCard = ({ providers, setProviders, showToast }) => {
     setTestingId(provider.id);
     setTimeout(() => {
       setTestingId(null);
-      showToast?.('Format Validated', `${provider.name} credentials format verified.`);
+      showToast?.('Key Present', `${provider.name} has an API key configured. Live connectivity was not tested.`);
     }, 400);
   };
 

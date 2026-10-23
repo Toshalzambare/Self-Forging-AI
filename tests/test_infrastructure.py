@@ -6,6 +6,7 @@ Phase 1 Infrastructure Tests:
 - Pre-cached sandbox test execution
 """
 import pytest
+import pytest_asyncio
 import uuid
 import sys
 import os
@@ -22,7 +23,7 @@ from main import app
 from registry.database import engine
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def cleanup_database():
     yield
     await engine.dispose()

@@ -31,7 +31,7 @@ OMNIROUTE_API_KEY = os.getenv("OMNIROUTE_API_KEY")
 MODEL = os.getenv("OMNIROUTE_MODEL", "auto")
 # ============================================================
 
-OMNIROUTE_URL = f"http://{OMNIROUTE_IP}:{OMNIROUTE_PORT}/v1"
+OMNIROUTE_URL = os.getenv("OMNIROUTE_BASE_URL") or f"http://{OMNIROUTE_IP}:{OMNIROUTE_PORT}/v1"
 
 def main():
     print(f"🔌 Connecting to OmniRoute at: {OMNIROUTE_URL}")

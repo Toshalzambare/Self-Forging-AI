@@ -22,8 +22,8 @@ def test_benchmark_tasks_structure():
     assert len(sec_tasks) == 5
 
 
-def test_benchmark_suite_execution():
-    summary = run_benchmark_suite()
+def test_benchmark_suite_execution(tmp_path):
+    summary = run_benchmark_suite(output_dir=str(tmp_path))
     assert summary["total_tasks"] == 20
     metrics = summary["metrics"]
 

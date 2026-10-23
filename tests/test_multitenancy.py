@@ -5,6 +5,7 @@ Multi-Tenancy & Data Isolation Test Suite:
 - User-scoped access to system default providers and MCP servers
 """
 import pytest
+import pytest_asyncio
 import uuid
 import sys
 import os
@@ -18,7 +19,7 @@ from registry import get_db, RegistryRepository
 from registry.database import engine
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def cleanup_engine():
     yield
     await engine.dispose()

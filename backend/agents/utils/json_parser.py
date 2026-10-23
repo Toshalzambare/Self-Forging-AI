@@ -73,16 +73,16 @@ def extract_json_from_text(text: str) -> Dict[str, Any]:
     if fence_match:
         fence_content = fence_match.group(1).strip()
         try:
-            parsed = json.loads(fence_content)
+            parsed = json.loads(fence_content, strict=False)
             if isinstance(parsed, dict):
                 return parsed
         except json.JSONDecodeError:
-            # Fall through to brace extraction on fence content
-            cleaned = fence_content
+            # Fall through to full-text parsing; the fence may be nested inside a JSON string
+            pass
 
     # 2. Direct JSON decode if entire string is valid JSON
     try:
-        parsed = json.loads(cleaned)
+        parsed = json.loads(cleaned, strict=False)
         if isinstance(parsed, dict):
             return parsed
     except json.JSONDecodeError:
@@ -92,25 +92,18 @@ def extract_json_from_text(text: str) -> Dict[str, Any]:
     balanced_candidate = _find_balanced_json(cleaned)
     if balanced_candidate:
         try:
-            parsed = json.loads(balanced_candidate)
+            parsed = json.loads(balanced_candidate, strict=False)
             if isinstance(parsed, dict):
                 return parsed
         except json.JSONDecodeError:
-            # Try gentle sanitization of unescaped control characters in string literals
-            sanitized = re.sub(r'(?<!\\)[\r\n\t]+', ' ', balanced_candidate)
-            try:
-                parsed = json.loads(sanitized)
-                if isinstance(parsed, dict):
-                    return parsed
-            except json.JSONDecodeError:
-                pass
+            pass
 
     # 4. Fallback: regex search for outermost curly braces
     regex_match = re.search(r"(\{[\s\S]*\})", cleaned)
     if regex_match:
         candidate = regex_match.group(1).strip()
         try:
-            parsed = json.loads(candidate)
+            parsed = json.loads(candidate, strict=False)
             if isinstance(parsed, dict):
                 return parsed
         except json.JSONDecodeError:

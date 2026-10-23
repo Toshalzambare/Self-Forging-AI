@@ -3,6 +3,7 @@ ConversationService: Encapsulates database queries and business logic
 for persistent chat sessions and multi-tenant message isolation.
 """
 import uuid
+import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from sqlalchemy import select, desc, func
@@ -10,6 +11,8 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from registry.models import Conversation, Message
+
+logger = logging.getLogger(__name__)
 
 
 class ConversationService:
@@ -75,21 +78,32 @@ class ConversationService:
         List all conversations for a user, sorted by pinned status then updated_at descending.
         Includes message count and preview of the last message.
         """
+        msg_count_subq = (
+            select(func.count(Message.id))
+            .where(Message.conversation_id == Conversation.id)
+            .scalar_subquery()
+        )
+        latest_msg_subq = (
+            select(func.substr(Message.content, 1, 60))
+            .where(Message.conversation_id == Conversation.id)
+            .order_by(Message.created_at.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+
+        safe_limit = max(1, min(limit, 100))
         stmt = (
-            select(Conversation)
-            .options(selectinload(Conversation.messages))
+            select(Conversation, msg_count_subq.label("msg_count"), latest_msg_subq.label("last_preview"))
             .where(Conversation.user_id == user_id)
             .order_by(Conversation.is_pinned.desc(), Conversation.updated_at.desc())
-            .limit(limit)
-            .offset(offset)
+            .limit(safe_limit)
+            .offset(max(0, offset))
         )
         result = await db.execute(stmt)
-        conversations = result.scalars().all()
+        rows = result.all()
 
         summaries = []
-        for conv in conversations:
-            messages = conv.messages or []
-            last_msg = messages[-1].content[:60] if messages else None
+        for conv, msg_count, last_preview in rows:
             summaries.append({
                 "id": str(conv.id),
                 "user_id": str(conv.user_id),
@@ -97,8 +111,8 @@ class ConversationService:
                 "is_pinned": conv.is_pinned,
                 "created_at": conv.created_at.isoformat() if conv.created_at else None,
                 "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
-                "message_count": len(messages),
-                "last_message_preview": last_msg,
+                "message_count": msg_count or 0,
+                "last_message_preview": last_preview,
             })
         return summaries
 
@@ -151,8 +165,26 @@ class ConversationService:
         if not conversation:
             return False
 
+        # CodeRabbit Finding 20: Collect and cleanup S3 objects for deleted attachments
+        import asyncio
+        from config import config
+        from registry.models import ConversationAttachment
+        from storage.service import delete_file
+
+        stmt_att = select(ConversationAttachment.s3_key).where(
+            ConversationAttachment.conversation_id == conversation_id
+        )
+        res_att = await db.execute(stmt_att)
+        s3_keys = [r[0] for r in res_att.fetchall() if r[0]]
+
         await db.delete(conversation)
-        await db.flush()
+        await db.commit()
+
+        for key in s3_keys:
+            try:
+                await asyncio.to_thread(delete_file, config.MINIO_BUCKET_DOCS, key)
+            except Exception as exc:
+                logger.warning(f"Non-fatal: failed to delete S3 attachment {key}: {exc}")
         return True
 
     @staticmethod

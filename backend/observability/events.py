@@ -3,11 +3,12 @@ Agent Lifecycle Event Emitter and Definitions.
 Formats, persists to PostgreSQL activity_logs, and broadcasts events over WebSockets.
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from registry.database import get_db
@@ -15,6 +16,24 @@ from registry.repository import RegistryRepository
 from observability.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
+
+# Active session streaming listener queues (e.g., SSE connections)
+_SESSION_LISTENERS: Dict[str, List[asyncio.Queue]] = {}
+
+
+def register_session_listener(session_id: str, queue: asyncio.Queue) -> None:
+    """Register an active queue to receive events for a specific conversation session."""
+    _SESSION_LISTENERS.setdefault(str(session_id), []).append(queue)
+
+
+def unregister_session_listener(session_id: str, queue: asyncio.Queue) -> None:
+    """Unregister an active queue from receiving session events."""
+    sid = str(session_id)
+    listeners = _SESSION_LISTENERS.get(sid, [])
+    if queue in listeners:
+        listeners.remove(queue)
+    if not listeners:
+        _SESSION_LISTENERS.pop(sid, None)
 
 
 class AgentLifecycleEvent(str, Enum):
@@ -63,7 +82,27 @@ async def emit_agent_event(
         except Exception as exc:
             logger.warning("Error broadcasting event '%s' via WebSocket: %s", event_name, str(exc))
 
-        # 2. Persist to PostgreSQL ActivityLog
+        # 2. Real-time dispatch to active SSE session listeners
+        sid = str(session_id) if session_id else None
+        if sid and sid in _SESSION_LISTENERS:
+            for q in list(_SESSION_LISTENERS[sid]):
+                try:
+                    q.put_nowait({"type": "lifecycle", "payload": payload})
+                    if event_name == AgentLifecycleEvent.AGENT_THINKING.value:
+                        thought_text = extra_data.get("thought") or summary
+                        q.put_nowait({"type": "thinking", "payload": {"thought": thought_text}})
+                    elif event_name in (
+                        AgentLifecycleEvent.FORGE_STARTED.value,
+                        AgentLifecycleEvent.SANDBOX_TESTING.value,
+                        AgentLifecycleEvent.TOOL_VERIFIED.value,
+                        AgentLifecycleEvent.TOOL_FAILED.value,
+                        AgentLifecycleEvent.REPAIR_ATTEMPT.value,
+                    ):
+                        q.put_nowait({"type": "activity", "payload": payload})
+                except Exception:
+                    pass
+
+        # 3. Persist to PostgreSQL ActivityLog
         try:
             details_str = json.dumps({"summary": summary, **extra_data}, default=str)
             if db is not None:

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '../config.js';
-import { getAccessToken, getStoredUser } from './api.js';
+import { getAccessToken, getStoredUser, refreshTokens } from './api.js';
 
 const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
 const MAX_BUFFERED_EVENTS = 100;
@@ -80,16 +80,24 @@ export const useActivityWebSocket = () => {
         }
       };
 
-      ws.onclose = (event) => {
+      ws.onclose = async (event) => {
         setConnectionStatus('disconnected');
         if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
 
-        // Reconnect unless closed intentionally or unauthorized (4003)
-        if (event.code !== 4003) {
-          const delay = Math.min(backoffRef.current, 10000);
-          backoffRef.current = delay * 1.5;
-          reconnectTimeoutRef.current = setTimeout(connect, delay);
+        // If closed due to token expiry, refresh token and reconnect
+        if (event.code === 4001 || event.code === 4003) {
+          try {
+            await refreshTokens();
+            reconnectTimeoutRef.current = setTimeout(connect, 1000);
+          } catch {
+            // Refresh failed; user must re-authenticate
+          }
+          return;
         }
+
+        const delay = Math.min(backoffRef.current, 10000);
+        backoffRef.current = delay * 1.5;
+        reconnectTimeoutRef.current = setTimeout(connect, delay);
       };
 
       ws.onerror = (err) => {

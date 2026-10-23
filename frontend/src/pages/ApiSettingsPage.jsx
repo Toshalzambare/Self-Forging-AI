@@ -131,30 +131,22 @@ const ApiSettingsPage = ({ showToast, user }) => {
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div
-                  onClick={() => setAutonomyLevel('autonomous')}
-                  className={`p-5 rounded-2xl cursor-pointer transition shadow-sm ${
-                    autonomyLevel === 'autonomous'
-                      ? 'bg-surface-container border border-primary/40'
-                      : 'bg-surface-container-low hover:bg-surface-container'
-                  }`}
-                >
-                  <h4 className="font-body-lg text-body-lg font-semibold text-on-surface">Autonomous Execution</h4>
-                  <p className="text-xs text-on-surface-variant mt-1">
-                    Agent discovers, synthesizes, and tests tools without requiring interactive confirmation.
+                <div className="p-5 rounded-2xl bg-surface-container border border-primary/40 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-body-lg text-body-lg font-semibold text-on-surface">Autonomous Execution</h4>
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-primary/20 text-primary">Active</span>
+                  </div>
+                  <p className="text-xs text-on-surface-variant mt-2">
+                    Agent discovers, synthesizes, dual-gate verifies, and registers tools autonomously into the dynamic MCP registry without blocking user flow.
                   </p>
                 </div>
-                <div
-                  onClick={() => setAutonomyLevel('guided')}
-                  className={`p-5 rounded-2xl cursor-pointer transition shadow-sm ${
-                    autonomyLevel === 'guided'
-                      ? 'bg-surface-container border border-primary/40'
-                      : 'bg-surface-container-low hover:bg-surface-container'
-                  }`}
-                >
-                  <h4 className="font-body-lg text-body-lg font-semibold text-on-surface">Guided Mode (HITL)</h4>
-                  <p className="text-xs text-on-surface-variant mt-1">
-                    Agent asks for user authorization before admitting newly forged tools into the registry.
+                <div className="p-5 rounded-2xl bg-surface-container-low opacity-60 border border-outline-variant/30 shadow-sm cursor-not-allowed">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-body-lg text-body-lg font-semibold text-on-surface">Guided Mode (HITL)</h4>
+                    <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-outline-variant/30 text-on-surface-variant">Roadmap</span>
+                  </div>
+                  <p className="text-xs text-on-surface-variant mt-2">
+                    Interactive human-in-the-loop authorization prompt before admitting newly forged tools into the registry.
                   </p>
                 </div>
               </div>

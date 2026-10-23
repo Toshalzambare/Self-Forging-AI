@@ -4,6 +4,7 @@ Validates code safety AST profiling, argument schema compatibility,
 and contextual task alignment before granting tool reuse admission.
 """
 import logging
+import re
 from typing import Tuple, Dict, Any, Optional
 from registry.models import Tool
 from sandbox.profiler import check_security
@@ -32,17 +33,18 @@ def evaluate_effectiveness(
         return False, 0.0, msg
 
     # 2. Schema and Argument Compatibility
-    schema = tool.schema_json or {}
+    schema = tool.schema_json if isinstance(tool.schema_json, dict) else {}
+    params = schema.get("parameters") if isinstance(schema.get("parameters"), dict) else {}
     properties = (
         schema.get("properties")
-        or schema.get("parameters", {}).get("properties")
-        or {}
-    )
+        if isinstance(schema.get("properties"), dict)
+        else (params.get("properties") if isinstance(params.get("properties"), dict) else {})
+    ) or {}
     required_params = (
         schema.get("required")
-        or schema.get("parameters", {}).get("required")
-        or []
-    )
+        if isinstance(schema.get("required"), list)
+        else (params.get("required") if isinstance(params.get("required"), list) else [])
+    ) or []
 
     # Check for missing required parameters
     missing_required = [param for param in required_params if param not in args]
@@ -64,9 +66,11 @@ def evaluate_effectiveness(
     name_clean = tool.name.replace("_", " ").lower()
     desc_clean = (tool.description or "").lower()
 
-    if name_clean in task_clean or any(word in task_clean for word in tool.name.split("_")):
+    task_words = set(re.findall(r"[a-z0-9]+", task_clean))
+    name_words = {w for w in tool.name.lower().split("_") if len(w) >= 3}
+    if name_clean in task_clean or (name_words & task_words):
         context_score = 0.95
-    elif any(token in task_clean for token in desc_clean.split() if len(token) > 3):
+    elif any(token in task_words for token in desc_clean.split() if len(token) > 3):
         context_score = 0.80
     else:
         context_score = 0.60

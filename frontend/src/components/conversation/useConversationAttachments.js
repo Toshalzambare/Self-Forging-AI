@@ -1,9 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { API_BASE_URL, apiFetch } from '../../config.js';
 
 export function useConversationAttachments(activeId, showToast, ensureConversation) {
   const [attachments, setAttachments] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const activeUploadsCountRef = useRef(0);
+  const pendingConvRef = useRef(null);
+  const activeIdRef = useRef(activeId);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
 
   // Fetch attachments when active conversation changes
   useEffect(() => {
@@ -33,11 +39,17 @@ export function useConversationAttachments(activeId, showToast, ensureConversati
     async (file) => {
       if (!file) return;
 
+      activeUploadsCountRef.current += 1;
       setIsUploading(true);
       try {
         let targetConvId = activeId;
         if (!targetConvId && ensureConversation) {
-          const conv = await ensureConversation(file.name);
+          if (!pendingConvRef.current) {
+            pendingConvRef.current = ensureConversation(file.name).finally(() => {
+              pendingConvRef.current = null;
+            });
+          }
+          const conv = await pendingConvRef.current;
           targetConvId = conv?.id;
         }
 
@@ -49,28 +61,25 @@ export function useConversationAttachments(activeId, showToast, ensureConversati
         const formData = new FormData();
         formData.append('file', file);
 
-        const token = localStorage.getItem('sfa_access_token');
-        const res = await fetch(`${API_BASE_URL}/api/conversations/${targetConvId}/attachments`, {
+        const data = await apiFetch(`/api/conversations/${targetConvId}/attachments`, {
           method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formData,
         });
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.detail || `Upload failed with status ${res.status}`);
-        }
-
-        const data = await res.json();
         const uploaded = data.attachment;
-        setAttachments((prev) => [...prev, uploaded]);
+        if (targetConvId === activeIdRef.current) {
+          setAttachments((prev) => [...prev, uploaded]);
+        }
         showToast?.('Document Attached', `${uploaded.filename} uploaded and parsed for context.`);
         return uploaded;
       } catch (err) {
         console.error('Attachment upload error:', err);
         showToast?.('Upload Failed', err.message || 'Could not upload document.');
       } finally {
-        setIsUploading(false);
+        activeUploadsCountRef.current = Math.max(0, activeUploadsCountRef.current - 1);
+        if (activeUploadsCountRef.current === 0) {
+          setIsUploading(false);
+        }
       }
     },
     [activeId, ensureConversation, showToast]

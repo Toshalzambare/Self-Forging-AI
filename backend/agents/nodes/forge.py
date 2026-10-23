@@ -2,7 +2,7 @@ import json
 import logging
 from pydantic import BaseModel, Field
 from agents.state import AgentState
-from agents.llm import llm
+from agents.llm import get_llm
 from agents.utils import extract_json_from_text
 from agents.research.engine import ResearchEngine
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -45,7 +45,7 @@ You are the Tool Forge. Your job is to write a standalone, robust Python script 
 Rules for the Python code:
 1. It MUST contain a function named `execute(...)`.
 2. Do NOT use external pip dependencies unless absolutely necessary (prefer standard library).
-3. The code must be safe to run in a sandboxed environment.
+3. The code must be pure computation and safe to run in an offline sandboxed environment (no network access, file writes, or system commands). Prefer standard modules like math, re, collections, itertools, json, datetime, statistics.
 4. Also generate a standard JSON schema defining the arguments for the `execute` function.
 
 Return ONLY a valid JSON object with EXACTLY these two keys:
@@ -64,7 +64,8 @@ Return ONLY a valid JSON object with EXACTLY these two keys:
 
     user_prompt = HumanMessage(content=user_content)
     
-    response = await llm.ainvoke([sys_prompt, user_prompt])
+    active_llm = get_llm(model=state.get("model"))
+    response = await active_llm.ainvoke([sys_prompt, user_prompt])
     content = response.content
     
     try:

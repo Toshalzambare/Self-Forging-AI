@@ -82,13 +82,29 @@ async def register_node(state: AgentState) -> dict:
             )
 
         # Hot-swap into dynamic in-memory MCP registry
-        dynamic_mcp_registry.register_dynamic_tool(
+        hot_swapped = dynamic_mcp_registry.register_dynamic_tool(
             user_id=user_id,
             tool_id=tool.id,
             name=tool_name,
             code=code,
             schema=schema if isinstance(schema, dict) else {},
         )
+        if not hot_swapped:
+            logger.error("Hot-swap compilation failed for tool '%s' (%s)", tool_name, tool.id)
+            if user_id:
+                async with get_db() as db:
+                    await RegistryRepository.update_tool_status(db, str(tool.id), str(user_id), status="quarantined")
+            return {
+                "is_registered": False,
+                "registered_tool_id": tool.id,
+                "error": f"Tool '{tool_name}' failed runtime dynamic compilation.",
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "content": f"Tool '{tool_name}' passed tests but failed dynamic runtime hot-swap."
+                    }
+                ]
+            }
 
         if user_id:
             try:

@@ -6,7 +6,7 @@ export const SandboxConfigCard = ({ showToast }) => {
     image: 'sfa-sandbox:latest',
     memory_limit: '512m',
     timeout_seconds: 60,
-    network_mode: 'bridge',
+    network_mode: 'none',
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -108,7 +108,6 @@ export const SandboxConfigCard = ({ showToast }) => {
             >
               <option value="none">none (Air-gapped / Full Isolation)</option>
               <option value="bridge">bridge (Local Docker Subnet)</option>
-              <option value="host">host (Unrestricted Host Network)</option>
             </select>
           </div>
         </div>

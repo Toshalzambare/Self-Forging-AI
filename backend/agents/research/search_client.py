@@ -4,6 +4,7 @@ Provides unified search interface with DuckDuckGo HTML endpoint as default,
 plus mock provider support for deterministic offline testing.
 """
 import logging
+import urllib.parse
 from typing import List, Dict, Any, Optional
 import httpx
 from bs4 import BeautifulSoup
@@ -49,8 +50,19 @@ async def _search_duckduckgo(query: str, max_results: int = 3) -> List[Dict[str,
             href = title_elem.get("href", "")
             snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
 
-            # Filter out internal DuckDuckGo ad/promo links
-            if href and not href.startswith("https://duckduckgo.com/y.js"):
+            if href.startswith("//"):
+                href = "https:" + href
+
+            # Decode DuckDuckGo protocol-relative redirect URLs
+            parsed = urllib.parse.urlsplit(href)
+            if parsed.path.startswith("/l/"):
+                qs = urllib.parse.parse_qs(parsed.query)
+                target = qs.get("uddg", [""])[0]
+                if target:
+                    href = urllib.parse.unquote(target)
+
+            # Filter out internal DuckDuckGo ad/promo links and ensure valid scheme
+            if href and not ("duckduckgo.com/y.js" in href) and href.startswith(("http://", "https://")):
                 results.append({
                     "title": title,
                     "url": href,
@@ -95,6 +107,9 @@ async def search_web(query: str, max_results: Optional[int] = None) -> List[Dict
 
     limit = max_results or config.SEARCH_MAX_RESULTS
     provider = config.SEARCH_PROVIDER.lower()
+
+    if provider in ("none", "disabled", "off"):
+        return []
 
     if provider == "mock":
         return _get_mock_search_results(query.strip(), limit)
